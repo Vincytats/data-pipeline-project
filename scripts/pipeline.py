@@ -12,7 +12,8 @@ import io
 # -------------------------------
 # CONFIGURATION
 # -------------------------------
-
+os.makedirs("logs", exist_ok=True)
+os.makedirs("data", exist_ok=True)
 PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
