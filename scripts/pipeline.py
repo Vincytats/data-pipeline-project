@@ -13,8 +13,8 @@ import io
 # CONFIGURATION
 # -------------------------------
 
-PARTICIPANT_LIST_FILE_ID = "REPLACE_WITH_DRIVE_FILE_ID"
-WAGES_FILE_ID = "REPLACE_WITH_DRIVE_FILE_ID"
+PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
+WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
 MASTER_FILE = "data/master_dataset.csv"
 OUTPUT_FILE = "data/processed_participant_data.csv"
