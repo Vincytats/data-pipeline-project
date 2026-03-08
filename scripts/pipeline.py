@@ -8,8 +8,9 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
+
 # ----------------------------------------------------
-# SET PROJECT ROOT DIRECTORY
+# SETUP DIRECTORIES
 # ----------------------------------------------------
 
 ROOT_DIR = os.getcwd()
@@ -17,27 +18,29 @@ ROOT_DIR = os.getcwd()
 LOG_DIR = os.path.join(ROOT_DIR, "logs")
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 
-# ----------------------------------------------------
-# CREATE REQUIRED DIRECTORIES
-# ----------------------------------------------------
-
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "pipeline.log")
+
+# ensure log file exists
+if not os.path.exists(LOG_FILE):
+    open(LOG_FILE, "w").close()
+
 
 # ----------------------------------------------------
 # LOGGING
 # ----------------------------------------------------
 
-log_file = os.path.join(LOG_DIR, "pipeline.log")
-
 logging.basicConfig(
-    filename=log_file,
+    filename=LOG_FILE,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 print("Pipeline started")
 logging.info("Pipeline started")
+
 
 # ----------------------------------------------------
 # GOOGLE DRIVE AUTHENTICATION
@@ -55,6 +58,7 @@ drive_service = build("drive", "v3", credentials=credentials)
 
 logging.info("Connected to Google Drive")
 
+
 # ----------------------------------------------------
 # GOOGLE DRIVE FILE IDS
 # ----------------------------------------------------
@@ -62,8 +66,9 @@ logging.info("Connected to Google Drive")
 PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
+
 # ----------------------------------------------------
-# DOWNLOAD FILE FUNCTION
+# DOWNLOAD FUNCTION
 # ----------------------------------------------------
 
 def download_drive_file(file_id, filename):
@@ -88,13 +93,14 @@ def download_drive_file(file_id, filename):
 
 
 # ----------------------------------------------------
-# DOWNLOAD DATA
+# DOWNLOAD FILES
 # ----------------------------------------------------
 
 download_drive_file(PARTICIPANT_LIST_FILE_ID, "Participant_List.xlsx")
 download_drive_file(WAGES_FILE_ID, "Participant_Wages.xlsx")
 
 logging.info("Files downloaded")
+
 
 # ----------------------------------------------------
 # LOAD DATA
@@ -104,6 +110,7 @@ participants = pd.read_excel("Participant_List.xlsx")
 wages = pd.read_excel("Participant_Wages.xlsx")
 
 logging.info("Excel files loaded")
+
 
 # ----------------------------------------------------
 # STANDARDIZE COLUMN NAMES
@@ -119,13 +126,15 @@ wages.rename(
     inplace=True
 )
 
+
 # ----------------------------------------------------
-# MERGE DATASETS
+# MERGE DATA
 # ----------------------------------------------------
 
 df = pd.merge(wages, participants, on="ID", how="left")
 
 logging.info("Datasets merged")
+
 
 # ----------------------------------------------------
 # DATA CLEANING
@@ -143,13 +152,16 @@ for col in numeric_columns:
 
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+
 if "Date Paid" in df.columns:
 
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
 
+
 df.dropna(how="all", inplace=True)
 
 logging.info("Data cleaned")
+
 
 # ----------------------------------------------------
 # CALCULATED FIELDS
@@ -159,9 +171,11 @@ if "Days worked" in df.columns:
 
     df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
 
+
 if "Nett Wages Paid" in df.columns:
 
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
+
 
 if "Age" in df.columns:
 
@@ -171,12 +185,14 @@ if "Age" in df.columns:
 
 logging.info("Calculated fields created")
 
+
 # ----------------------------------------------------
-# MASTER DATASET HANDLING
+# MASTER DATASET
 # ----------------------------------------------------
 
 MASTER_FILE = os.path.join(DATA_DIR, "master_dataset.csv")
 OUTPUT_FILE = os.path.join(DATA_DIR, "processed_participant_data.csv")
+
 
 if os.path.exists(MASTER_FILE):
 
@@ -190,8 +206,9 @@ else:
 
     combined = df
 
+
 # ----------------------------------------------------
-# SAVE DATASETS
+# SAVE DATA
 # ----------------------------------------------------
 
 combined.to_csv(MASTER_FILE, index=False)
