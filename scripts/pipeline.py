@@ -2,40 +2,35 @@ import os
 import json
 import logging
 import pandas as pd
+import io
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-import io
+# ----------------------------------------------------
+# CREATE REQUIRED DIRECTORIES (IMPORTANT FOR GITHUB)
+# ----------------------------------------------------
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
 os.makedirs("logs", exist_ok=True)
 os.makedirs("data", exist_ok=True)
-PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
-WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
-MASTER_FILE = "data/master_dataset.csv"
-OUTPUT_FILE = "data/processed_participant_data.csv"
-LOG_FILE = "logs/pipeline.log"
-
-# -------------------------------
+# ----------------------------------------------------
 # LOGGING
-# -------------------------------
+# ----------------------------------------------------
 
 logging.basicConfig(
-    filename=LOG_FILE,
+    filename="logs/pipeline.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 print("Pipeline started")
+logging.info("Pipeline started")
 
-# -------------------------------
-# AUTHENTICATE GOOGLE DRIVE
-# -------------------------------
+# ----------------------------------------------------
+# GOOGLE DRIVE AUTHENTICATION
+# ----------------------------------------------------
 
 creds_json = os.environ["GOOGLE_CREDENTIALS"]
 creds_dict = json.loads(creds_json)
@@ -49,10 +44,17 @@ drive_service = build("drive", "v3", credentials=credentials)
 
 logging.info("Connected to Google Drive")
 
+# ----------------------------------------------------
+# GOOGLE DRIVE FILE IDS
+# (replace with your real file IDs)
+# ----------------------------------------------------
 
-# -------------------------------
-# DOWNLOAD FILE FROM DRIVE
-# -------------------------------
+PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
+WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
+
+# ----------------------------------------------------
+# FUNCTION TO DOWNLOAD FILES
+# ----------------------------------------------------
 
 def download_drive_file(file_id, filename):
 
@@ -74,20 +76,25 @@ def download_drive_file(file_id, filename):
 
     logging.info(f"Downloaded {filename}")
 
+# ----------------------------------------------------
+# DOWNLOAD DATA
+# ----------------------------------------------------
 
 download_drive_file(PARTICIPANT_LIST_FILE_ID, "Participant_List.xlsx")
 download_drive_file(WAGES_FILE_ID, "Participant_Wages.xlsx")
 
-# -------------------------------
+# ----------------------------------------------------
 # LOAD DATA
-# -------------------------------
+# ----------------------------------------------------
 
 participants = pd.read_excel("Participant_List.xlsx")
 wages = pd.read_excel("Participant_Wages.xlsx")
 
-# -------------------------------
-# STANDARDIZE COLUMNS
-# -------------------------------
+logging.info("Excel files loaded")
+
+# ----------------------------------------------------
+# STANDARDIZE COLUMN NAMES
+# ----------------------------------------------------
 
 participants.rename(
     columns={"ID number/Non SA Passport": "ID"},
@@ -99,17 +106,17 @@ wages.rename(
     inplace=True
 )
 
-# -------------------------------
-# MERGE DATASETS
-# -------------------------------
+# ----------------------------------------------------
+# MERGE DATA
+# ----------------------------------------------------
 
 df = pd.merge(wages, participants, on="ID", how="left")
 
 logging.info("Datasets merged")
 
-# -------------------------------
+# ----------------------------------------------------
 # DATA CLEANING
-# -------------------------------
+# ----------------------------------------------------
 
 df.drop_duplicates(inplace=True)
 
@@ -126,14 +133,13 @@ for col in numeric_columns:
 if "Date Paid" in df.columns:
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
 
-# Remove empty rows
 df.dropna(how="all", inplace=True)
 
-logging.info("Data cleaning complete")
+logging.info("Data cleaned")
 
-# -------------------------------
+# ----------------------------------------------------
 # CALCULATED FIELDS
-# -------------------------------
+# ----------------------------------------------------
 
 if "Days worked" in df.columns:
     df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
@@ -141,7 +147,7 @@ if "Days worked" in df.columns:
 if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
-# Youth / Adult grouping
+# Youth / Adult classification
 if "Age" in df.columns:
     df["YouthAdult"] = df["Age"].apply(
         lambda x: "Youth" if x < 35 else "Adult"
@@ -149,9 +155,12 @@ if "Age" in df.columns:
 
 logging.info("Calculated fields created")
 
-# -------------------------------
-# LOAD MASTER DATASET
-# -------------------------------
+# ----------------------------------------------------
+# MASTER DATASET HANDLING
+# ----------------------------------------------------
+
+MASTER_FILE = "data/master_dataset.csv"
+OUTPUT_FILE = "data/processed_participant_data.csv"
 
 if os.path.exists(MASTER_FILE):
 
@@ -165,22 +174,21 @@ else:
 
     combined = df
 
-# -------------------------------
+# ----------------------------------------------------
 # SAVE MASTER DATASET
-# -------------------------------
-
-os.makedirs("data", exist_ok=True)
+# ----------------------------------------------------
 
 combined.to_csv(MASTER_FILE, index=False)
 
 logging.info("Master dataset updated")
 
-# -------------------------------
+# ----------------------------------------------------
 # SAVE PROCESSED DATASET
-# -------------------------------
+# ----------------------------------------------------
 
 combined.to_csv(OUTPUT_FILE, index=False)
 
 logging.info("Processed dataset saved")
 
 print("Pipeline finished successfully")
+logging.info("Pipeline finished successfully")
