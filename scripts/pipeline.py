@@ -9,13 +9,17 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 # ----------------------------------------------------
-# SET BASE DIRECTORY (IMPORTANT FOR GITHUB)
+# SET PROJECT ROOT DIRECTORY
 # ----------------------------------------------------
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.getcwd()
 
-LOG_DIR = os.path.join(BASE_DIR, "logs")
-DATA_DIR = os.path.join(BASE_DIR, "data")
+LOG_DIR = os.path.join(ROOT_DIR, "logs")
+DATA_DIR = os.path.join(ROOT_DIR, "data")
+
+# ----------------------------------------------------
+# CREATE REQUIRED DIRECTORIES
+# ----------------------------------------------------
 
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -24,8 +28,10 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # LOGGING
 # ----------------------------------------------------
 
+log_file = os.path.join(LOG_DIR, "pipeline.log")
+
 logging.basicConfig(
-    filename=os.path.join(LOG_DIR, "pipeline.log"),
+    filename=log_file,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -57,7 +63,7 @@ PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
 # ----------------------------------------------------
-# FUNCTION TO DOWNLOAD FILES
+# DOWNLOAD FILE FUNCTION
 # ----------------------------------------------------
 
 def download_drive_file(file_id, filename):
@@ -80,12 +86,15 @@ def download_drive_file(file_id, filename):
 
     logging.info(f"Downloaded {filename}")
 
+
 # ----------------------------------------------------
 # DOWNLOAD DATA
 # ----------------------------------------------------
 
 download_drive_file(PARTICIPANT_LIST_FILE_ID, "Participant_List.xlsx")
 download_drive_file(WAGES_FILE_ID, "Participant_Wages.xlsx")
+
+logging.info("Files downloaded")
 
 # ----------------------------------------------------
 # LOAD DATA
@@ -111,7 +120,7 @@ wages.rename(
 )
 
 # ----------------------------------------------------
-# MERGE DATA
+# MERGE DATASETS
 # ----------------------------------------------------
 
 df = pd.merge(wages, participants, on="ID", how="left")
@@ -129,10 +138,13 @@ df.dropna(subset=["ID"], inplace=True)
 numeric_columns = ["Days worked", "Nett Wages Paid"]
 
 for col in numeric_columns:
+
     if col in df.columns:
+
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
 if "Date Paid" in df.columns:
+
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
 
 df.dropna(how="all", inplace=True)
@@ -144,12 +156,15 @@ logging.info("Data cleaned")
 # ----------------------------------------------------
 
 if "Days worked" in df.columns:
+
     df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
 
 if "Nett Wages Paid" in df.columns:
+
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
 if "Age" in df.columns:
+
     df["YouthAdult"] = df["Age"].apply(
         lambda x: "Youth" if x < 35 else "Adult"
     )
