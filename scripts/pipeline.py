@@ -9,18 +9,23 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 # ----------------------------------------------------
-# CREATE REQUIRED DIRECTORIES (IMPORTANT FOR GITHUB)
+# SET BASE DIRECTORY (IMPORTANT FOR GITHUB)
 # ----------------------------------------------------
 
-os.makedirs("logs", exist_ok=True)
-os.makedirs("data", exist_ok=True)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+DATA_DIR = os.path.join(BASE_DIR, "data")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 
 # ----------------------------------------------------
 # LOGGING
 # ----------------------------------------------------
 
 logging.basicConfig(
-    filename="logs/pipeline.log",
+    filename=os.path.join(LOG_DIR, "pipeline.log"),
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -46,7 +51,6 @@ logging.info("Connected to Google Drive")
 
 # ----------------------------------------------------
 # GOOGLE DRIVE FILE IDS
-# (replace with your real file IDs)
 # ----------------------------------------------------
 
 PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
@@ -122,14 +126,12 @@ df.drop_duplicates(inplace=True)
 
 df.dropna(subset=["ID"], inplace=True)
 
-# Convert numeric columns
 numeric_columns = ["Days worked", "Nett Wages Paid"]
 
 for col in numeric_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# Fix date
 if "Date Paid" in df.columns:
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
 
@@ -147,7 +149,6 @@ if "Days worked" in df.columns:
 if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
-# Youth / Adult classification
 if "Age" in df.columns:
     df["YouthAdult"] = df["Age"].apply(
         lambda x: "Youth" if x < 35 else "Adult"
@@ -159,8 +160,8 @@ logging.info("Calculated fields created")
 # MASTER DATASET HANDLING
 # ----------------------------------------------------
 
-MASTER_FILE = "data/master_dataset.csv"
-OUTPUT_FILE = "data/processed_participant_data.csv"
+MASTER_FILE = os.path.join(DATA_DIR, "master_dataset.csv")
+OUTPUT_FILE = os.path.join(DATA_DIR, "processed_participant_data.csv")
 
 if os.path.exists(MASTER_FILE):
 
@@ -175,20 +176,13 @@ else:
     combined = df
 
 # ----------------------------------------------------
-# SAVE MASTER DATASET
+# SAVE DATASETS
 # ----------------------------------------------------
 
 combined.to_csv(MASTER_FILE, index=False)
-
-logging.info("Master dataset updated")
-
-# ----------------------------------------------------
-# SAVE PROCESSED DATASET
-# ----------------------------------------------------
-
 combined.to_csv(OUTPUT_FILE, index=False)
 
-logging.info("Processed dataset saved")
+logging.info("Datasets saved")
 
 print("Pipeline finished successfully")
 logging.info("Pipeline finished successfully")
