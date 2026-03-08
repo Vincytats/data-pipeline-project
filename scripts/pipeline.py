@@ -8,39 +8,23 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-
 # ----------------------------------------------------
-# SETUP DIRECTORIES
-# ----------------------------------------------------
-
-ROOT_DIR = os.getcwd()
-
-LOG_DIR = os.path.join(ROOT_DIR, "logs")
-DATA_DIR = os.path.join(ROOT_DIR, "data")
-
-os.makedirs(LOG_DIR, exist_ok=True)
-os.makedirs(DATA_DIR, exist_ok=True)
-
-LOG_FILE = os.path.join(LOG_DIR, "pipeline.log")
-
-# ensure log file exists
-if not os.path.exists(LOG_FILE):
-    open(LOG_FILE, "w").close()
-
-
-# ----------------------------------------------------
-# LOGGING
+# LOGGING (CONSOLE - BEST FOR CI PIPELINES)
 # ----------------------------------------------------
 
 logging.basicConfig(
-    filename=LOG_FILE,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-print("Pipeline started")
 logging.info("Pipeline started")
 
+# ----------------------------------------------------
+# CREATE DATA DIRECTORY
+# ----------------------------------------------------
+
+DATA_DIR = "data"
+os.makedirs(DATA_DIR, exist_ok=True)
 
 # ----------------------------------------------------
 # GOOGLE DRIVE AUTHENTICATION
@@ -58,14 +42,12 @@ drive_service = build("drive", "v3", credentials=credentials)
 
 logging.info("Connected to Google Drive")
 
-
 # ----------------------------------------------------
 # GOOGLE DRIVE FILE IDS
 # ----------------------------------------------------
 
 PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
-
 
 # ----------------------------------------------------
 # DOWNLOAD FUNCTION
@@ -76,12 +58,10 @@ def download_drive_file(file_id, filename):
     request = drive_service.files().get_media(fileId=file_id)
 
     fh = io.BytesIO()
-
     downloader = MediaIoBaseDownload(fh, request)
 
     done = False
-
-    while done is False:
+    while not done:
         status, done = downloader.next_chunk()
 
     fh.seek(0)
@@ -90,7 +70,6 @@ def download_drive_file(file_id, filename):
         f.write(fh.read())
 
     logging.info(f"Downloaded {filename}")
-
 
 # ----------------------------------------------------
 # DOWNLOAD FILES
@@ -101,7 +80,6 @@ download_drive_file(WAGES_FILE_ID, "Participant_Wages.xlsx")
 
 logging.info("Files downloaded")
 
-
 # ----------------------------------------------------
 # LOAD DATA
 # ----------------------------------------------------
@@ -111,9 +89,8 @@ wages = pd.read_excel("Participant_Wages.xlsx")
 
 logging.info("Excel files loaded")
 
-
 # ----------------------------------------------------
-# STANDARDIZE COLUMN NAMES
+# STANDARDIZE COLUMNS
 # ----------------------------------------------------
 
 participants.rename(
@@ -126,7 +103,6 @@ wages.rename(
     inplace=True
 )
 
-
 # ----------------------------------------------------
 # MERGE DATA
 # ----------------------------------------------------
@@ -135,56 +111,40 @@ df = pd.merge(wages, participants, on="ID", how="left")
 
 logging.info("Datasets merged")
 
-
 # ----------------------------------------------------
 # DATA CLEANING
 # ----------------------------------------------------
 
 df.drop_duplicates(inplace=True)
-
 df.dropna(subset=["ID"], inplace=True)
 
 numeric_columns = ["Days worked", "Nett Wages Paid"]
 
 for col in numeric_columns:
-
     if col in df.columns:
-
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-
 if "Date Paid" in df.columns:
-
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
-
 
 df.dropna(how="all", inplace=True)
 
 logging.info("Data cleaned")
-
 
 # ----------------------------------------------------
 # CALCULATED FIELDS
 # ----------------------------------------------------
 
 if "Days worked" in df.columns:
-
     df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
 
-
 if "Nett Wages Paid" in df.columns:
-
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
-
 if "Age" in df.columns:
-
-    df["YouthAdult"] = df["Age"].apply(
-        lambda x: "Youth" if x < 35 else "Adult"
-    )
+    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
 
 logging.info("Calculated fields created")
-
 
 # ----------------------------------------------------
 # MASTER DATASET
@@ -193,28 +153,23 @@ logging.info("Calculated fields created")
 MASTER_FILE = os.path.join(DATA_DIR, "master_dataset.csv")
 OUTPUT_FILE = os.path.join(DATA_DIR, "processed_participant_data.csv")
 
-
 if os.path.exists(MASTER_FILE):
 
     master = pd.read_csv(MASTER_FILE)
 
     combined = pd.concat([master, df])
-
     combined.drop_duplicates(inplace=True)
 
 else:
 
     combined = df
 
-
 # ----------------------------------------------------
-# SAVE DATA
+# SAVE OUTPUTS
 # ----------------------------------------------------
 
 combined.to_csv(MASTER_FILE, index=False)
 combined.to_csv(OUTPUT_FILE, index=False)
 
 logging.info("Datasets saved")
-
-print("Pipeline finished successfully")
 logging.info("Pipeline finished successfully")
