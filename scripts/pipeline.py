@@ -6,10 +6,10 @@ import io
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseUpload
 
 # ------------------------------------------------
-# LOGGING (CONSOLE)
+# LOGGING
 # ------------------------------------------------
 
 logging.basicConfig(
@@ -20,14 +20,7 @@ logging.basicConfig(
 logging.info("Pipeline started")
 
 # ------------------------------------------------
-# CREATE DATA DIRECTORY
-# ------------------------------------------------
-
-DATA_DIR = "data"
-os.makedirs(DATA_DIR, exist_ok=True)
-
-# ------------------------------------------------
-# GOOGLE DRIVE AUTHENTICATION
+# GOOGLE AUTH
 # ------------------------------------------------
 
 creds_json = os.environ.get("GOOGLE_CREDENTIALS")
@@ -47,55 +40,26 @@ drive_service = build("drive", "v3", credentials=credentials)
 logging.info("Connected to Google Drive")
 
 # ------------------------------------------------
-# GOOGLE DRIVE FILE IDS
+# GOOGLE SHEET IDS
 # ------------------------------------------------
 
-PARTICIPANT_LIST_FILE_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
-WAGES_FILE_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
+PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
+WAGES_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
 # ------------------------------------------------
-# DOWNLOAD FUNCTION
+# READ GOOGLE SHEETS DIRECTLY
 # ------------------------------------------------
 
-def download_drive_file(file_id, filename):
+participants_url = f"https://docs.google.com/spreadsheets/d/{PARTICIPANT_LIST_ID}/export?format=csv"
+wages_url = f"https://docs.google.com/spreadsheets/d/{WAGES_ID}/export?format=csv"
 
-    request = drive_service.files().get_media(fileId=file_id)
+participants = pd.read_csv(participants_url)
+wages = pd.read_csv(wages_url)
 
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, request)
-
-    done = False
-
-    while not done:
-        status, done = downloader.next_chunk()
-
-    fh.seek(0)
-
-    with open(filename, "wb") as f:
-        f.write(fh.read())
-
-    logging.info(f"Downloaded {filename}")
+logging.info("Google Sheets loaded")
 
 # ------------------------------------------------
-# DOWNLOAD DATA
-# ------------------------------------------------
-
-download_drive_file(PARTICIPANT_LIST_FILE_ID, "Participant_List.xlsx")
-download_drive_file(WAGES_FILE_ID, "Participant_Wages.xlsx")
-
-logging.info("Files downloaded")
-
-# ------------------------------------------------
-# LOAD DATA
-# ------------------------------------------------
-
-participants = pd.read_excel("Participant_List.xlsx")
-wages = pd.read_excel("Participant_Wages.xlsx")
-
-logging.info("Excel files loaded")
-
-# ------------------------------------------------
-# STANDARDIZE COLUMNS
+# CLEAN DATA
 # ------------------------------------------------
 
 participants.rename(
@@ -108,33 +72,12 @@ wages.rename(
     inplace=True
 )
 
-# ------------------------------------------------
-# MERGE DATA
-# ------------------------------------------------
-
 df = pd.merge(wages, participants, on="ID", how="left")
-
-logging.info("Datasets merged")
-
-# ------------------------------------------------
-# DATA CLEANING
-# ------------------------------------------------
 
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-numeric_columns = ["Days worked", "Nett Wages Paid"]
-
-for col in numeric_columns:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-if "Date Paid" in df.columns:
-    df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
-
-df.dropna(how="all", inplace=True)
-
-logging.info("Data cleaned")
+logging.info("Data merged")
 
 # ------------------------------------------------
 # CALCULATED FIELDS
@@ -147,35 +90,43 @@ if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
 if "Age" in df.columns:
-    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
+    df["YouthAdult"] = df["Age"].apply(
+        lambda x: "Youth" if x < 35 else "Adult"
+    )
 
 logging.info("Calculated fields created")
 
 # ------------------------------------------------
-# MASTER DATASET
+# SAVE DATASET LOCALLY
 # ------------------------------------------------
 
-MASTER_FILE = os.path.join(DATA_DIR, "master_dataset.csv")
-OUTPUT_FILE = os.path.join(DATA_DIR, "processed_participant_data.csv")
+output_file = "processed_participant_data.csv"
+df.to_csv(output_file, index=False)
 
-if os.path.exists(MASTER_FILE):
-
-    master = pd.read_csv(MASTER_FILE)
-
-    combined = pd.concat([master, df])
-    combined.drop_duplicates(inplace=True)
-
-else:
-
-    combined = df
+logging.info("Dataset created")
 
 # ------------------------------------------------
-# SAVE OUTPUTS
+# GOOGLE DRIVE FOLDER TO SAVE OUTPUT
 # ------------------------------------------------
 
-combined.to_csv(MASTER_FILE, index=False)
-combined.to_csv(OUTPUT_FILE, index=False)
+OUTPUT_FOLDER_ID = "1vzl5Q_sZC3e9uonrNdxkgwneYfwulMu5"
 
-logging.info("Datasets saved")
+file_metadata = {
+    "name": output_file,
+    "parents": [OUTPUT_FOLDER_ID]
+}
 
-logging.info("Pipeline finished successfully")
+media = MediaIoBaseUpload(
+    io.FileIO(output_file, "rb"),
+    mimetype="text/csv"
+)
+
+uploaded_file = drive_service.files().create(
+    body=file_metadata,
+    media_body=media,
+    fields="id"
+).execute()
+
+logging.info("File uploaded to Google Drive")
+
+print("Pipeline finished successfully")
