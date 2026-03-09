@@ -8,9 +8,9 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-# ------------------------------------------------
+# ---------------------------------------------
 # LOGGING
-# ------------------------------------------------
+# ---------------------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,9 +19,9 @@ logging.basicConfig(
 
 logging.info("Pipeline started")
 
-# ------------------------------------------------
+# ---------------------------------------------
 # GOOGLE AUTH
-# ------------------------------------------------
+# ---------------------------------------------
 
 creds_json = os.environ.get("GOOGLE_CREDENTIALS")
 
@@ -39,16 +39,16 @@ drive_service = build("drive", "v3", credentials=credentials)
 
 logging.info("Connected to Google Drive")
 
-# ------------------------------------------------
+# ---------------------------------------------
 # GOOGLE SHEET IDS
-# ------------------------------------------------
+# ---------------------------------------------
 
 PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
-# ------------------------------------------------
-# READ GOOGLE SHEETS DIRECTLY
-# ------------------------------------------------
+# ---------------------------------------------
+# LOAD GOOGLE SHEETS DIRECTLY
+# ---------------------------------------------
 
 participants_url = f"https://docs.google.com/spreadsheets/d/{PARTICIPANT_LIST_ID}/export?format=csv"
 wages_url = f"https://docs.google.com/spreadsheets/d/{WAGES_ID}/export?format=csv"
@@ -58,9 +58,9 @@ wages = pd.read_csv(wages_url)
 
 logging.info("Google Sheets loaded")
 
-# ------------------------------------------------
+# ---------------------------------------------
 # CLEAN DATA
-# ------------------------------------------------
+# ---------------------------------------------
 
 participants.rename(
     columns={"ID number/Non SA Passport": "ID"},
@@ -77,11 +77,11 @@ df = pd.merge(wages, participants, on="ID", how="left")
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-logging.info("Data merged")
+logging.info("Datasets merged")
 
-# ------------------------------------------------
+# ---------------------------------------------
 # CALCULATED FIELDS
-# ------------------------------------------------
+# ---------------------------------------------
 
 if "Days worked" in df.columns:
     df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
@@ -90,26 +90,25 @@ if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
 if "Age" in df.columns:
-    df["YouthAdult"] = df["Age"].apply(
-        lambda x: "Youth" if x < 35 else "Adult"
-    )
+    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
 
 logging.info("Calculated fields created")
 
-# ------------------------------------------------
-# SAVE DATASET LOCALLY
-# ------------------------------------------------
+# ---------------------------------------------
+# SAVE DATASET
+# ---------------------------------------------
 
 output_file = "processed_participant_data.csv"
+
 df.to_csv(output_file, index=False)
 
 logging.info("Dataset created")
 
-# ------------------------------------------------
-# GOOGLE DRIVE FOLDER TO SAVE OUTPUT
-# ------------------------------------------------
+# ---------------------------------------------
+# UPLOAD TO GOOGLE DRIVE
+# ---------------------------------------------
 
-OUTPUT_FOLDER_ID = "1vzl5Q_sZC3e9uonrNdxkgwneYfwulMu5"
+OUTPUT_FOLDER_ID = "PUT_YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"
 
 file_metadata = {
     "name": output_file,
@@ -121,12 +120,12 @@ media = MediaIoBaseUpload(
     mimetype="text/csv"
 )
 
-uploaded_file = drive_service.files().create(
+drive_service.files().create(
     body=file_metadata,
     media_body=media,
     fields="id"
 ).execute()
 
-logging.info("File uploaded to Google Drive")
+logging.info("Dataset uploaded to Google Drive")
 
 print("Pipeline finished successfully")
