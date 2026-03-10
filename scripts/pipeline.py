@@ -134,13 +134,42 @@ query = f"name='{FILE_NAME}' and '{FOLDER_ID}' in parents and trashed=false"
 
 results = drive_service.files().list(
     q=query,
-    fields="files(id, name)"
+    fields="files(id, name)",
+    supportsAllDrives=True,
+    includeItemsFromAllDrives=True
 ).execute()
 
 files = results.get("files", [])
 
-media = MediaFileUpload(output_file, mimetype="text/csv")
+media = MediaFileUpload(FILE_NAME, mimetype="text/csv")
 
+if files:
+
+    file_id = files[0]["id"]
+
+    drive_service.files().update(
+        fileId=file_id,
+        media_body=media,
+        supportsAllDrives=True
+    ).execute()
+
+    logging.info("Existing file replaced in Google Drive")
+
+else:
+
+    file_metadata = {
+        "name": FILE_NAME,
+        "parents": [FOLDER_ID]
+    }
+
+    drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id",
+        supportsAllDrives=True
+    ).execute()
+
+    logging.info("File uploaded to Google Drive")
 # ----------------------------------------
 # IF FILE EXISTS → UPDATE
 # ----------------------------------------
