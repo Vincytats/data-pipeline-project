@@ -1,5 +1,3 @@
-import os
-import json
 import logging
 import pandas as pd
 import requests
@@ -23,25 +21,24 @@ participants_url = f"https://docs.google.com/spreadsheets/d/{PARTICIPANT_LIST_ID
 wages_url = f"https://docs.google.com/spreadsheets/d/{WAGES_ID}/export?format=csv"
 
 # ------------------------------------------------
-# FUNCTION TO DOWNLOAD SHEET SAFELY
+# SAFE DOWNLOAD FUNCTION
 # ------------------------------------------------
 
 def load_google_sheet(url):
 
     for attempt in range(3):
-
         try:
             response = requests.get(url, timeout=60)
 
             if response.status_code != 200:
-                raise Exception(f"Failed to download sheet: {response.status_code}")
+                raise Exception(f"Download failed: {response.status_code}")
 
             return pd.read_csv(StringIO(response.text))
 
         except Exception as e:
-            logging.warning(f"Download attempt {attempt+1} failed: {e}")
+            logging.warning(f"Attempt {attempt+1} failed: {e}")
 
-    raise Exception("Failed to download Google Sheet after retries")
+    raise Exception("Failed to download Google Sheet")
 
 # ------------------------------------------------
 # LOAD DATA
@@ -52,10 +49,6 @@ wages = load_google_sheet(wages_url)
 
 logging.info("Google Sheets loaded successfully")
 
-# ------------------------------------------------
-# CLEAN COLUMN NAMES
-# ------------------------------------------------
-
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
 
@@ -63,30 +56,33 @@ logging.info(f"Participants columns: {participants.columns.tolist()}")
 logging.info(f"Wages columns: {wages.columns.tolist()}")
 
 # ------------------------------------------------
-# RENAME ID COLUMNS (BASED ON YOUR FILES)
+# FIX ID COLUMN NAMES
 # ------------------------------------------------
 
 participants.rename(
-    columns={"ID number/Non SA Passport": "ID"},
-    inplace=True
-)
-
-wages.rename(
     columns={"ID Number": "ID"},
     inplace=True
 )
 
+wages.rename(
+    columns={"ID number/Non SA Passport": "ID"},
+    inplace=True
+)
+
+# verify ID exists
 if "ID" not in participants.columns:
-    raise Exception("ID column missing in participants sheet")
+    raise Exception("Participants sheet missing ID column")
 
 if "ID" not in wages.columns:
-    raise Exception("ID column missing in wages sheet")
+    raise Exception("Wages sheet missing ID column")
+
+logging.info("ID columns standardized")
 
 # ------------------------------------------------
-# MERGE DATA
+# MERGE DATASETS
 # ------------------------------------------------
 
-df = pd.merge(wages, participants, on="ID", how="left")
+df = pd.merge(participants, wages, on="ID", how="left")
 
 logging.info("Datasets merged successfully")
 
@@ -116,7 +112,7 @@ if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
 if "Age" in df.columns:
-    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
+    df["YouthAdultGroup"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
 
 logging.info("Calculated fields created")
 
