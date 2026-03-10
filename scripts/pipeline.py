@@ -42,24 +42,18 @@ WAGES_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 participants_url = f"https://docs.google.com/spreadsheets/d/{PARTICIPANT_LIST_ID}/export?format=csv"
 wages_url = f"https://docs.google.com/spreadsheets/d/{WAGES_ID}/export?format=csv"
 
-def load_google_sheet(url):
+def load_sheet(url):
 
-    for attempt in range(3):
-        try:
-            r = requests.get(url, timeout=60)
+    r = requests.get(url)
 
-            if r.status_code != 200:
-                raise Exception("Download failed")
+    if r.status_code != 200:
+        raise Exception("Could not download sheet")
 
-            return pd.read_csv(StringIO(r.text))
+    return pd.read_csv(StringIO(r.text))
 
-        except Exception as e:
-            logging.warning(f"Attempt {attempt+1} failed: {e}")
 
-    raise Exception("Could not download sheet")
-
-participants = load_google_sheet(participants_url)
-wages = load_google_sheet(wages_url)
+participants = load_sheet(participants_url)
+wages = load_sheet(wages_url)
 
 logging.info("Google Sheets loaded successfully")
 
@@ -113,7 +107,7 @@ logging.info("Calculated fields created")
 # WRITE OUTPUT TO GOOGLE SHEET
 # ------------------------------------------------
 
-OUTPUT_SHEET_ID = "PASTE_OUTPUT_SHEET_ID_HERE"
+OUTPUT_SHEET_ID = "1X9fJkwQ44x8ZgfEG1DVncslmEe0SeCQKcpape9bFMTs"
 
 spreadsheet = gc.open_by_key(OUTPUT_SHEET_ID)
 
