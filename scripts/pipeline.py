@@ -8,9 +8,9 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-# ---------------------------------------------
+# ------------------------------
 # LOGGING
-# ---------------------------------------------
+# ------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,9 +19,9 @@ logging.basicConfig(
 
 logging.info("Pipeline started")
 
-# ---------------------------------------------
+# ------------------------------
 # GOOGLE AUTH
-# ---------------------------------------------
+# ------------------------------
 
 creds_json = os.environ.get("GOOGLE_CREDENTIALS")
 
@@ -39,16 +39,16 @@ drive_service = build("drive", "v3", credentials=credentials)
 
 logging.info("Connected to Google Drive")
 
-# ---------------------------------------------
-# GOOGLE SHEET IDS
-# ---------------------------------------------
+# ------------------------------
+# GOOGLE SHEETS IDS
+# ------------------------------
 
 PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
-# ---------------------------------------------
-# LOAD GOOGLE SHEETS DIRECTLY
-# ---------------------------------------------
+# ------------------------------
+# READ GOOGLE SHEETS
+# ------------------------------
 
 participants_url = f"https://docs.google.com/spreadsheets/d/{PARTICIPANT_LIST_ID}/export?format=csv"
 wages_url = f"https://docs.google.com/spreadsheets/d/{WAGES_ID}/export?format=csv"
@@ -58,9 +58,9 @@ wages = pd.read_csv(wages_url)
 
 logging.info("Google Sheets loaded")
 
-# ---------------------------------------------
+# ------------------------------
 # CLEAN DATA
-# ---------------------------------------------
+# ------------------------------
 
 participants.rename(
     columns={"ID number/Non SA Passport": "ID"},
@@ -79,9 +79,9 @@ df.dropna(subset=["ID"], inplace=True)
 
 logging.info("Datasets merged")
 
-# ---------------------------------------------
+# ------------------------------
 # CALCULATED FIELDS
-# ---------------------------------------------
+# ------------------------------
 
 if "Days worked" in df.columns:
     df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
@@ -94,21 +94,21 @@ if "Age" in df.columns:
 
 logging.info("Calculated fields created")
 
-# ---------------------------------------------
+# ------------------------------
 # SAVE DATASET
-# ---------------------------------------------
+# ------------------------------
 
 output_file = "processed_participant_data.csv"
 
 df.to_csv(output_file, index=False)
 
-logging.info("Dataset created")
+logging.info("Dataset saved locally")
 
-# ---------------------------------------------
+# ------------------------------
 # UPLOAD TO GOOGLE DRIVE
-# ---------------------------------------------
+# ------------------------------
 
-OUTPUT_FOLDER_ID = "PUT_YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"
+OUTPUT_FOLDER_ID = "1vzl5Q_sZC3e9uonrNdxkgwneYfwulMu5"
 
 file_metadata = {
     "name": output_file,
