@@ -1,13 +1,40 @@
+import os
+import json
 import logging
 import pandas as pd
 import requests
 from io import StringIO
 
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
+# ----------------------------------------
+# LOGGING
+# ----------------------------------------
+
 logging.basicConfig(level=logging.INFO)
 logging.info("Pipeline started")
 
 # ----------------------------------------
-# GOOGLE SHEET IDS
+# GOOGLE AUTH
+# ----------------------------------------
+
+creds_json = os.environ.get("GOOGLE_CREDENTIALS")
+
+creds_dict = json.loads(creds_json)
+
+credentials = Credentials.from_service_account_info(
+    creds_dict,
+    scopes=["https://www.googleapis.com/auth/drive"]
+)
+
+drive_service = build("drive", "v3", credentials=credentials)
+
+logging.info("Connected to Google Drive")
+
+# ----------------------------------------
+# GOOGLE SHEETS
 # ----------------------------------------
 
 PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
@@ -45,27 +72,12 @@ logging.info("Google Sheets loaded successfully")
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
 
-logging.info(f"Participants columns: {participants.columns.tolist()}")
-logging.info(f"Wages columns: {wages.columns.tolist()}")
-
 # ----------------------------------------
-# RENAME ID COLUMNS
+# FIX ID COLUMNS
 # ----------------------------------------
 
 participants.rename(columns={"ID Number": "ID"}, inplace=True)
 wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
-
-# ----------------------------------------
-# CHECK ID EXISTS
-# ----------------------------------------
-
-if "ID" not in participants.columns:
-    raise Exception("Participants sheet still missing ID column")
-
-if "ID" not in wages.columns:
-    raise Exception("Wages sheet still missing ID column")
-
-logging.info("ID columns standardized")
 
 # ----------------------------------------
 # MERGE
@@ -73,7 +85,7 @@ logging.info("ID columns standardized")
 
 df = pd.merge(participants, wages, on="ID", how="left")
 
-logging.info("Datasets merged successfully")
+logging.info("Datasets merged")
 
 # ----------------------------------------
 # CLEAN DATA
@@ -88,8 +100,6 @@ if "Days worked" in df.columns:
 if "Nett Wages Paid" in df.columns:
     df["Nett Wages Paid"] = pd.to_numeric(df["Nett Wages Paid"], errors="coerce")
 
-logging.info("Data cleaned")
-
 # ----------------------------------------
 # CALCULATED FIELDS
 # ----------------------------------------
@@ -103,14 +113,66 @@ if "Nett Wages Paid" in df.columns:
 if "Age" in df.columns:
     df["YouthAdultGroup"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
 
-logging.info("Calculated fields created")
-
 # ----------------------------------------
-# SAVE OUTPUT
+# SAVE DATASET
 # ----------------------------------------
 
-df.to_csv("processed_participant_data.csv", index=False)
+output_file = "processed_participant_data.csv"
 
-logging.info("Dataset saved")
+df.to_csv(output_file, index=False)
+
+logging.info("Dataset saved locally")
+
+# ----------------------------------------
+# GOOGLE DRIVE UPLOAD / REPLACE
+# ----------------------------------------
+
+FOLDER_ID = "1vzl5Q_sZC3e9uonrNdxkgwneYfwulMu5"
+FILE_NAME = "processed_participant_data.csv"
+
+query = f"name='{FILE_NAME}' and '{FOLDER_ID}' in parents and trashed=false"
+
+results = drive_service.files().list(
+    q=query,
+    fields="files(id, name)"
+).execute()
+
+files = results.get("files", [])
+
+media = MediaFileUpload(output_file, mimetype="text/csv")
+
+# ----------------------------------------
+# IF FILE EXISTS → UPDATE
+# ----------------------------------------
+
+if files:
+
+    file_id = files[0]["id"]
+
+    drive_service.files().update(
+        fileId=file_id,
+        media_body=media
+    ).execute()
+
+    logging.info("Existing file replaced in Google Drive")
+
+# ----------------------------------------
+# IF FILE DOESN'T EXIST → CREATE
+# ----------------------------------------
+
+else:
+
+    file_metadata = {
+        "name": FILE_NAME,
+        "parents": [FOLDER_ID]
+    }
+
+    drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id"
+    ).execute()
+
+    logging.info("File uploaded to Google Drive")
 
 print("Pipeline finished successfully")
