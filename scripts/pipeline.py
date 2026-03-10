@@ -40,7 +40,7 @@ drive_service = build("drive", "v3", credentials=credentials)
 logging.info("Connected to Google Drive")
 
 # ------------------------------------------------
-# GOOGLE SHEETS IDS
+# GOOGLE SHEET IDS
 # ------------------------------------------------
 
 PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
@@ -62,22 +62,33 @@ logging.info("Google Sheets loaded")
 # CLEAN COLUMN NAMES
 # ------------------------------------------------
 
-participants.columns = participants.columns.str.strip()
-wages.columns = wages.columns.str.strip()
+participants.columns = participants.columns.str.strip().str.lower()
+wages.columns = wages.columns.str.strip().str.lower()
+
+logging.info(f"Participants columns: {participants.columns}")
+logging.info(f"Wages columns: {wages.columns}")
 
 # ------------------------------------------------
-# RENAME ID COLUMNS (REAL STRUCTURE FROM FILES)
+# FIND ID COLUMN AUTOMATICALLY
 # ------------------------------------------------
 
-participants.rename(
-    columns={"ID number/Non SA Passport": "ID"},
-    inplace=True
-)
+def find_id_column(columns):
+    for col in columns:
+        if "id" in col:
+            return col
+    return None
 
-wages.rename(
-    columns={"ID Number": "ID"},
-    inplace=True
-)
+participant_id_col = find_id_column(participants.columns)
+wages_id_col = find_id_column(wages.columns)
+
+if participant_id_col is None:
+    raise Exception(f"No ID column found in participants sheet: {participants.columns}")
+
+if wages_id_col is None:
+    raise Exception(f"No ID column found in wages sheet: {wages.columns}")
+
+participants.rename(columns={participant_id_col: "ID"}, inplace=True)
+wages.rename(columns={wages_id_col: "ID"}, inplace=True)
 
 logging.info("ID columns standardized")
 
@@ -96,16 +107,14 @@ logging.info("Datasets merged")
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-# Convert numeric fields
-numeric_cols = ["Days worked", "Nett Wages Paid"]
+numeric_cols = ["days worked", "nett wages paid"]
 
 for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# Convert dates
-if "Date Paid" in df.columns:
-    df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
+if "date paid" in df.columns:
+    df["date paid"] = pd.to_datetime(df["date paid"], errors="coerce")
 
 df.dropna(how="all", inplace=True)
 
@@ -115,14 +124,14 @@ logging.info("Data cleaned")
 # CALCULATED FIELDS
 # ------------------------------------------------
 
-if "Days worked" in df.columns:
-    df["AverageDaysWorked"] = df.groupby("ID")["Days worked"].transform("mean")
+if "days worked" in df.columns:
+    df["AverageDaysWorked"] = df.groupby("ID")["days worked"].transform("mean")
 
-if "Nett Wages Paid" in df.columns:
-    df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
+if "nett wages paid" in df.columns:
+    df["AverageWagesPaid"] = df.groupby("ID")["nett wages paid"].transform("mean")
 
-if "Age" in df.columns:
-    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
+if "age" in df.columns:
+    df["YouthAdult"] = df["age"].apply(lambda x: "Youth" if x < 35 else "Adult")
 
 logging.info("Calculated fields created")
 
