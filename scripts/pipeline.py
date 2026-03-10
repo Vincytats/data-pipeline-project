@@ -40,7 +40,7 @@ drive_service = build("drive", "v3", credentials=credentials)
 logging.info("Connected to Google Drive")
 
 # ------------------------------------------------
-# GOOGLE SHEET IDS
+# GOOGLE SHEETS IDS
 # ------------------------------------------------
 
 PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
@@ -65,27 +65,19 @@ logging.info("Google Sheets loaded")
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
 
-logging.info(f"Participants columns: {participants.columns.tolist()}")
-logging.info(f"Wages columns: {wages.columns.tolist()}")
-
 # ------------------------------------------------
-# AUTO DETECT ID COLUMN
+# RENAME ID COLUMNS (REAL STRUCTURE FROM FILES)
 # ------------------------------------------------
 
-def detect_id_column(df):
+participants.rename(
+    columns={"ID number/Non SA Passport": "ID"},
+    inplace=True
+)
 
-    for col in df.columns:
-        if "id" in col.lower():
-            return col
-
-    raise Exception(f"No ID column detected. Columns are: {df.columns}")
-
-
-participants_id_col = detect_id_column(participants)
-wages_id_col = detect_id_column(wages)
-
-participants.rename(columns={participants_id_col: "ID"}, inplace=True)
-wages.rename(columns={wages_id_col: "ID"}, inplace=True)
+wages.rename(
+    columns={"ID Number": "ID"},
+    inplace=True
+)
 
 logging.info("ID columns standardized")
 
@@ -104,14 +96,14 @@ logging.info("Datasets merged")
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-# Convert numeric columns safely
-numeric_columns = ["Days worked", "Nett Wages Paid"]
+# Convert numeric fields
+numeric_cols = ["Days worked", "Nett Wages Paid"]
 
-for col in numeric_columns:
+for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# Fix dates
+# Convert dates
 if "Date Paid" in df.columns:
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
 
@@ -130,9 +122,7 @@ if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
 if "Age" in df.columns:
-    df["YouthAdult"] = df["Age"].apply(
-        lambda x: "Youth" if x < 35 else "Adult"
-    )
+    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
 
 logging.info("Calculated fields created")
 
