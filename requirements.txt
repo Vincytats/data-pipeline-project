@@ -3,3 +3,4 @@ openpyxl
 gdown
 google-api-python-client
 google-auth
+gspread
