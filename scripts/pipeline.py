@@ -65,14 +65,26 @@ logging.info("Google Sheets loaded")
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
 
+logging.info(f"Participants columns: {participants.columns.tolist()}")
+logging.info(f"Wages columns: {wages.columns.tolist()}")
+
 # ------------------------------------------------
 # AUTO DETECT ID COLUMN
 # ------------------------------------------------
 
-participant_id_col = [c for c in participants.columns if "id" in c.lower()][0]
-wages_id_col = [c for c in wages.columns if "id" in c.lower()][0]
+def detect_id_column(df):
 
-participants.rename(columns={participant_id_col: "ID"}, inplace=True)
+    for col in df.columns:
+        if "id" in col.lower():
+            return col
+
+    raise Exception(f"No ID column detected. Columns are: {df.columns}")
+
+
+participants_id_col = detect_id_column(participants)
+wages_id_col = detect_id_column(wages)
+
+participants.rename(columns={participants_id_col: "ID"}, inplace=True)
 wages.rename(columns={wages_id_col: "ID"}, inplace=True)
 
 logging.info("ID columns standardized")
@@ -92,14 +104,14 @@ logging.info("Datasets merged")
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-# convert numeric columns
-numeric_cols = ["Days worked", "Nett Wages Paid"]
+# Convert numeric columns safely
+numeric_columns = ["Days worked", "Nett Wages Paid"]
 
-for col in numeric_cols:
+for col in numeric_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# convert date
+# Fix dates
 if "Date Paid" in df.columns:
     df["Date Paid"] = pd.to_datetime(df["Date Paid"], errors="coerce")
 
@@ -118,7 +130,9 @@ if "Nett Wages Paid" in df.columns:
     df["AverageWagesPaid"] = df.groupby("ID")["Nett Wages Paid"].transform("mean")
 
 if "Age" in df.columns:
-    df["YouthAdult"] = df["Age"].apply(lambda x: "Youth" if x < 35 else "Adult")
+    df["YouthAdult"] = df["Age"].apply(
+        lambda x: "Youth" if x < 35 else "Adult"
+    )
 
 logging.info("Calculated fields created")
 
@@ -136,7 +150,7 @@ logging.info("Dataset saved locally")
 # UPLOAD TO GOOGLE DRIVE
 # ------------------------------------------------
 
-OUTPUT_FOLDER_ID = "PASTE_YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"
+OUTPUT_FOLDER_ID = "1vzl5Q_sZC3e9uonrNdxkgwneYfwulMu5"
 
 file_metadata = {
     "name": output_file,
