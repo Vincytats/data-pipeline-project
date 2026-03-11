@@ -36,10 +36,6 @@ logging.info("Google Sheets loaded")
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
 
-# -----------------------------
-# FIX ID
-# -----------------------------
-
 participants.rename(columns={"ID Number": "ID"}, inplace=True)
 wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
 
