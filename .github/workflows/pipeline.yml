@@ -1,35 +1,7 @@
-name: Data Pipeline
+import logging
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 6 * * *"
+logging.basicConfig(level=logging.INFO)
 
-jobs:
-  run-pipeline:
-    runs-on: ubuntu-latest
+logging.info("NEW PIPELINE SCRIPT IS RUNNING")
 
-    steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Create required folders
-        run: |
-          mkdir -p logs
-          mkdir -p data
-
-      - name: Run pipeline
-        env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-        run: |
-          python scripts/pipeline.py
+print("Pipeline executed successfully")
