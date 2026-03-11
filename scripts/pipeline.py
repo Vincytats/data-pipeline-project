@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 logging.info("Pipeline started")
 
+
 PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 WAGES_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
