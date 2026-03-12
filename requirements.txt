@@ -1,8 +1,3 @@
 pandas
-openpyxl
-gdown
-google-api-python-client
-google-auth
-gspread
 requests
 Office365-REST-Python-Client
