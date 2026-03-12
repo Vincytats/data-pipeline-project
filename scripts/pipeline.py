@@ -1,6 +1,6 @@
-import logging
 import pandas as pd
 import requests
+import logging
 from io import StringIO
 import os
 
@@ -9,30 +9,28 @@ from office365.runtime.auth.client_credential import ClientCredential
 
 logging.basicConfig(level=logging.INFO)
 
-logging.info("Pipeline started")
+print("PIPELINE VERSION FINAL RUNNING")
 
+# -----------------------------
+# GOOGLE SHEET IDS
+# -----------------------------
 
-PARTICIPANT_LIST_ID = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
-WAGES_ID = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
+participants_id = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
+wages_id = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
-participants_url = f"https://docs.google.com/spreadsheets/d/{PARTICIPANT_LIST_ID}/export?format=csv"
-wages_url = f"https://docs.google.com/spreadsheets/d/{WAGES_ID}/export?format=csv"
+participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
+wages_url = f"https://docs.google.com/spreadsheets/d/{wages_id}/export?format=csv"
 
 
 def load_sheet(url):
-
     r = requests.get(url)
-
-    if r.status_code != 200:
-        raise Exception("Could not download sheet")
-
     return pd.read_csv(StringIO(r.text))
 
 
 participants = load_sheet(participants_url)
 wages = load_sheet(wages_url)
 
-logging.info("Google Sheets loaded")
+logging.info("Sheets downloaded")
 
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
@@ -45,8 +43,6 @@ wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
 # -----------------------------
 
 df = pd.merge(participants, wages, on="ID", how="left")
-
-logging.info("Datasets merged")
 
 # -----------------------------
 # CLEAN
@@ -79,10 +75,10 @@ file_name = "processed_participant_data.csv"
 
 df.to_csv(file_name, index=False)
 
-logging.info("Dataset saved")
+logging.info("CSV created")
 
 # -----------------------------
-# SHAREPOINT CONNECTION
+# SHAREPOINT
 # -----------------------------
 
 site_url = "https://researchobs814.sharepoint.com/sites/ResearchObs"
@@ -94,21 +90,12 @@ ctx = ClientContext(site_url).with_credentials(
     ClientCredential(client_id, client_secret)
 )
 
-# -----------------------------
-# UPLOAD FILE
-# -----------------------------
+folder = "Shared Documents/PROJECT - TLT - Documents/Core Work/Data"
 
-folder_url = "Shared Documents/PROJECT - TLT - Documents/Core Work/Data"
+with open(file_name, "rb") as f:
 
-with open(file_name, "rb") as content_file:
+    ctx.web.get_folder_by_server_relative_url(folder)\
+        .upload_file(file_name, f.read())\
+        .execute_query()
 
-    file_content = content_file.read()
-
-ctx.web.get_folder_by_server_relative_url(folder_url).upload_file(
-    file_name,
-    file_content
-).execute_query()
-
-logging.info("File uploaded to SharePoint")
-
-print("Pipeline finished successfully")
+print("UPLOAD COMPLETE")
