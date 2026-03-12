@@ -22,6 +22,6 @@ jobs:
 
       - name: Run pipeline
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          SP_USERNAME: ${{ secrets.SP_USERNAME }}
+          SP_PASSWORD: ${{ secrets.SP_PASSWORD }}
         run: python scripts/pipeline.py
