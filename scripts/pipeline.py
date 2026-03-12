@@ -4,15 +4,12 @@ import logging
 from io import StringIO
 import os
 
-from office365.sharepoint.client_context import ClientContext
-from office365.runtime.auth.client_credential import ClientCredential
-
 logging.basicConfig(level=logging.INFO)
 
-print("PIPELINE VERSION FINAL RUNNING")
+print("PIPELINE FINAL VERSION RUNNING")
 
 # -----------------------------
-# GOOGLE SHEET IDS
+# GOOGLE SHEETS
 # -----------------------------
 
 participants_id = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
@@ -72,30 +69,28 @@ if "Nett Wages Paid" in df.columns:
 # -----------------------------
 
 file_name = "processed_participant_data.csv"
-
 df.to_csv(file_name, index=False)
 
 logging.info("CSV created")
 
 # -----------------------------
-# SHAREPOINT
+# SHAREPOINT UPLOAD
 # -----------------------------
 
-site_url = "https://researchobs814.sharepoint.com/sites/ResearchObs"
+sharepoint_url = "https://researchobs814.sharepoint.com/sites/ResearchObs/Shared%20Documents/PROJECT%20-%20TLT%20-%20Documents/Core%20Work/Data/processed_participant_data.csv"
 
-client_id = os.environ["AZURE_CLIENT_ID"]
-client_secret = os.environ["AZURE_CLIENT_SECRET"]
+username = os.environ["SP_USERNAME"]
+password = os.environ["SP_PASSWORD"]
 
-ctx = ClientContext(site_url).with_credentials(
-    ClientCredential(client_id, client_secret)
-)
+with open(file_name, "rb") as file:
 
-folder = "Shared Documents/PROJECT - TLT - Documents/Core Work/Data"
+    r = requests.put(
+        sharepoint_url,
+        data=file,
+        auth=(username, password)
+    )
 
-with open(file_name, "rb") as f:
-
-    ctx.web.get_folder_by_server_relative_url(folder)\
-        .upload_file(file_name, f.read())\
-        .execute_query()
-
-print("UPLOAD COMPLETE")
+if r.status_code in [200, 201]:
+    print("UPLOAD SUCCESSFUL")
+else:
+    print("UPLOAD FAILED:", r.text)
