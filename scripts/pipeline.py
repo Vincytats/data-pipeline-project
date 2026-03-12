@@ -77,20 +77,23 @@ logging.info("CSV created")
 # SHAREPOINT UPLOAD
 # -----------------------------
 
-sharepoint_url = "https://researchobs814.sharepoint.com/sites/ResearchObs/Shared%20Documents/PROJECT%20-%20TLT%20-%20Documents/Core%20Work/Data/processed_participant_data.csv"
+from office365.sharepoint.client_context import ClientContext
+from office365.runtime.auth.user_credential import UserCredential
+
+site_url = "https://researchobs814.sharepoint.com/sites/ResearchObs"
 
 username = os.environ["SP_USERNAME"]
 password = os.environ["SP_PASSWORD"]
 
-with open(file_name, "rb") as file:
+ctx = ClientContext(site_url).with_credentials(
+    UserCredential(username, password)
+)
 
-    r = requests.put(
-        sharepoint_url,
-        data=file,
-        auth=(username, password)
-    )
+folder_url = "Shared Documents/PROJECT - TLT - Documents/Core Work/Data"
 
-if r.status_code in [200, 201]:
-    print("UPLOAD SUCCESSFUL")
-else:
-    print("UPLOAD FAILED:", r.text)
+with open(file_name, "rb") as content_file:
+    ctx.web.get_folder_by_server_relative_url(folder_url) \
+        .upload_file(file_name, content_file.read()) \
+        .execute_query()
+
+print("UPLOAD COMPLETE")
