@@ -81,7 +81,6 @@ logging.info("CSV created")
 # ------------------------------------
 # PUSH FILE TO GITHUB
 # ------------------------------------
-
 print("Uploading CSV to GitHub...")
 
 subprocess.run(["git", "config", "--global", "user.name", "github-actions"])
