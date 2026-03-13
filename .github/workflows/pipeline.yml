@@ -1,8 +1,12 @@
 name: Data Pipeline
+
 permissions:
   contents: write
+
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
 
 jobs:
   run-pipeline:
@@ -10,21 +14,20 @@ jobs:
 
     steps:
 
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    - name: Install dependencies
+      run: |
+        pip install pandas requests
 
-      - name: Show pipeline script
-        run: cat scripts/pipeline.py
-
-      - name: Run pipeline
-        run: python scripts/pipeline.py
+    - name: Run pipeline
+      run: python scripts/pipeline.py
