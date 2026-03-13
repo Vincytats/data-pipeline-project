@@ -77,7 +77,6 @@ file_name = "processed_participant_data.csv"
 df.to_csv(file_name, index=False)
 
 logging.info("CSV created")
-
 # ------------------------------------
 # PUSH FILE TO GITHUB
 # ------------------------------------
