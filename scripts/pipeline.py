@@ -76,11 +76,10 @@ logging.info("CSV created")
 # -----------------------------
 # SHAREPOINT UPLOAD
 # -----------------------------
-
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 
-site_url = "https://researchobs814.sharepoint.com/sites/ResearchObs"
+site_url = "https://researchobs814.sharepoint.com/sites/ResearchObsProjects"
 
 username = os.environ["SP_USERNAME"]
 password = os.environ["SP_PASSWORD"]
@@ -91,9 +90,9 @@ ctx = ClientContext(site_url).with_credentials(
 
 folder_url = "Shared Documents/PROJECT - TLT - Documents/Core Work/Data"
 
-with open(file_name, "rb") as content_file:
+with open("processed_participant_data.csv", "rb") as f:
     ctx.web.get_folder_by_server_relative_url(folder_url) \
-        .upload_file(file_name, content_file.read()) \
+        .upload_file("processed_participant_data.csv", f.read()) \
         .execute_query()
 
-print("UPLOAD COMPLETE")
+print("File uploaded to SharePoint successfully")
