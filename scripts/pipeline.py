@@ -37,7 +37,7 @@ wages = load_sheet(wages_url)
 logging.info("Sheets downloaded")
 
 # =========================
-# CLEAN COLUMN NAMES
+# CLEAN
 # =========================
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
@@ -45,19 +45,16 @@ wages.columns = wages.columns.str.strip()
 participants.rename(columns={"ID Number": "ID"}, inplace=True)
 wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
 
-# =========================
-# MERGE DATA
-# =========================
 df = pd.merge(participants, wages, on="ID", how="left")
 
 logging.info("Datasets merged")
 
-# =========================
-# CLEAN DATA
-# =========================
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
+# =========================
+# NUMERIC CLEAN
+# =========================
 numeric_columns = [
     "Days worked",
     "Nett Wages Paid",
@@ -91,9 +88,7 @@ required_columns = [
     "New Wage Category"
 ]
 
-final_columns = [col for col in required_columns if col in df.columns]
-df = df[final_columns]
-
+df = df[[c for c in required_columns if c in df.columns]]
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
 # =========================
@@ -103,7 +98,7 @@ df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# AUTH TOKEN
+# AUTH
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -125,28 +120,22 @@ def upload_to_sharepoint(file_path):
     logging.info("Uploading to SharePoint...")
 
     token = get_access_token()
+    headers = {"Authorization": f"Bearer {token}"}
 
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
+    # 🔹 SAFE SITE SEARCH (FIXED)
+    search_url = "https://graph.microsoft.com/v1.0/sites?search=TheLearningTrust"
+    search_response = requests.get(search_url, headers=headers)
 
-# 🔹 Get site ID (SAFE METHOD)
-search_url = f"https://graph.microsoft.com/v1.0/sites?search=TheLearningTrust"
+    print("SEARCH RESPONSE:", search_response.json())
 
-search_response = requests.get(search_url, headers=headers)
-print("SEARCH RESPONSE:", search_response.json())
+    sites = search_response.json().get("value", [])
+    if not sites:
+        raise Exception("No SharePoint sites found")
 
-sites = search_response.json().get("value", [])
+    site_id = sites[0]["id"]
+    print("USING SITE ID:", site_id)
 
-if not sites:
-    raise Exception("No SharePoint sites found")
-
-# Pick the correct site (first match)
-site_id = sites[0]["id"]
-
-print("USING SITE ID:", site_id)
-
-    # Get drive ID
+    # 🔹 GET DRIVE
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
     drive_response = requests.get(drive_url, headers=headers)
 
