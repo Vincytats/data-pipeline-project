@@ -130,16 +130,21 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-    # Get site ID
-    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
-    response = requests.get(site_url, headers=headers)
+# 🔹 Get site ID (SAFE METHOD)
+search_url = f"https://graph.microsoft.com/v1.0/sites?search=TheLearningTrust"
 
-    print("SITE RESPONSE:", response.json())
+search_response = requests.get(search_url, headers=headers)
+print("SEARCH RESPONSE:", search_response.json())
 
-    if "id" not in response.json():
-        raise Exception(f"Failed to get site ID: {response.text}")
+sites = search_response.json().get("value", [])
 
-    site_id = response.json()["id"]
+if not sites:
+    raise Exception("No SharePoint sites found")
+
+# Pick the correct site (first match)
+site_id = sites[0]["id"]
+
+print("USING SITE ID:", site_id)
 
     # Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
