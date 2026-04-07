@@ -1,12 +1,12 @@
 name: Data Pipeline
 
-permissions:
-  contents: write
-
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * *"
+
+permissions:
+  contents: write
 
 jobs:
   run-pipeline:
@@ -16,9 +16,6 @@ jobs:
 
     - name: Checkout repository
       uses: actions/checkout@v3
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
 
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -30,4 +27,22 @@ jobs:
         pip install pandas requests
 
     - name: Run pipeline
+      env:
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        SHAREPOINT_SITE_NAME: ${{ secrets.SHAREPOINT_SITE_NAME }}
+        SHAREPOINT_SITE_PATH: ${{ secrets.SHAREPOINT_SITE_PATH }}
+        SHAREPOINT_FOLDER: ${{ secrets.SHAREPOINT_FOLDER }}
       run: python scripts/pipeline.py
+
+    - name: Debug files
+      run: ls -R
+
+    - name: Commit dataset
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "actions@github.com"
+        git add *.csv
+        git commit -m "Auto-update dataset" || echo "No changes"
+        git push
