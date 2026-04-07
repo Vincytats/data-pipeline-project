@@ -31,9 +31,7 @@ jobs:
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        SHAREPOINT_SITE_NAME: ${{ secrets.SHAREPOINT_SITE_NAME }}
-        SHAREPOINT_SITE_PATH: ${{ secrets.SHAREPOINT_SITE_PATH }}
-        SHAREPOINT_FOLDER: ${{ secrets.SHAREPOINT_FOLDER }}
+        ONEDRIVE_USER: ${{ secrets.ONEDRIVE_USER }}
       run: python scripts/pipeline.py
 
     - name: Debug files
