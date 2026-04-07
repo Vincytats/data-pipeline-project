@@ -58,7 +58,6 @@ logging.info("Datasets merged")
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-# Convert numeric columns safely
 numeric_columns = [
     "Days worked",
     "Nett Wages Paid",
@@ -104,7 +103,7 @@ df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# SHAREPOINT AUTH
+# AUTH TOKEN
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -120,7 +119,7 @@ def get_access_token():
     return response.json()["access_token"]
 
 # =========================
-# UPLOAD TO SHAREPOINT
+# UPLOAD FUNCTION
 # =========================
 def upload_to_sharepoint(file_path):
     logging.info("Uploading to SharePoint...")
@@ -131,10 +130,10 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-    # 🔹 Get site ID (FIXED FORMAT)
+    # Get site ID
     site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
-
     response = requests.get(site_url, headers=headers)
+
     print("SITE RESPONSE:", response.json())
 
     if "id" not in response.json():
@@ -142,7 +141,7 @@ def upload_to_sharepoint(file_path):
 
     site_id = response.json()["id"]
 
-    # 🔹 Get drive ID
+    # Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
     drive_response = requests.get(drive_url, headers=headers)
 
@@ -164,7 +163,7 @@ def upload_to_sharepoint(file_path):
         raise Exception(f"Upload failed: {upload_response.text}")
 
 # =========================
-# RUN UPLOAD
+# RUN
 # =========================
 upload_to_sharepoint(OUTPUT_FILE)
 
