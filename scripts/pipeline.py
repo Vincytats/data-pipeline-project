@@ -98,7 +98,7 @@ df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# AUTH TOKEN (FIXED)
+# AUTH TOKEN
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -112,7 +112,7 @@ def get_access_token():
 
     response = requests.post(url, data=data)
 
-    print("TOKEN RESPONSE:", response.json())  # debug
+    print("TOKEN RESPONSE:", response.json())
 
     if "access_token" not in response.json():
         raise Exception(f"Token error: {response.text}")
@@ -120,7 +120,7 @@ def get_access_token():
     return response.json()["access_token"]
 
 # =========================
-# SHAREPOINT REST UPLOAD
+# ONEDRIVE UPLOAD
 # =========================
 def upload_to_onedrive(file_path):
     logging.info("Uploading to OneDrive (Graph)...")
@@ -133,8 +133,8 @@ def upload_to_onedrive(file_path):
 
     file_name = os.path.basename(file_path)
 
-    # 🔥 THIS IS THE MAGIC LINE
-    upload_url = f"https://graph.microsoft.com/v1.0/me/drive/root:/Consolidated data/{file_name}:/content"
+    # 🔥 IMPORTANT: Use USER (not /me because this is app auth)
+    upload_url = f"https://graph.microsoft.com/v1.0/users/{os.environ['ONEDRIVE_USER']}/drive/root:/Consolidated data/{file_name}:/content"
 
     with open(file_path, "rb") as f:
         response = requests.put(upload_url, headers=headers, data=f)
@@ -146,24 +146,9 @@ def upload_to_onedrive(file_path):
     else:
         raise Exception(f"Upload failed: {response.text}")
 
-    # 🔹 Step 3: Upload file
-    file_name = os.path.basename(file_path)
-
-    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{file_name}:/content"
-
-    with open(file_path, "rb") as f:
-        upload_response = requests.put(upload_url, headers=headers, data=f)
-
-    print("UPLOAD RESPONSE:", upload_response.text)
-
-    if upload_response.status_code in [200, 201]:
-        logging.info("✅ Upload successful")
-    else:
-        raise Exception(f"Upload failed: {upload_response.text}")
-
 # =========================
 # RUN PIPELINE
 # =========================
-upload_to_sharepoint(OUTPUT_FILE)
+upload_to_onedrive(OUTPUT_FILE)
 
 logging.info("🎉 PIPELINE COMPLETE")
