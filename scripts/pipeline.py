@@ -128,17 +128,63 @@ def upload_to_sharepoint(file_path):
     file_name = os.path.basename(file_path)
 
     # 🔥 DIRECT UPLOAD (NO SITE ID NEEDED)
-    upload_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust:/drive/root:/{os.environ['SHAREPOINT_FOLDER']}/{file_name}:/content"
+def upload_to_sharepoint(file_path):
+    logging.info("Uploading to SharePoint...")
+
+    token = get_access_token()
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    # 🔹 STEP 1: Get site using FULL URL (MOST RELIABLE)
+    site_lookup_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
+
+    site_response = requests.get(site_lookup_url, headers=headers)
+    print("SITE RESPONSE:", site_response.json())
+
+    if "id" not in site_response.json():
+        raise Exception(f"Failed to get site ID: {site_response.text}")
+
+    site_id = site_response.json()["id"]
+
+    # 🔹 STEP 2: Get drives (document libraries)
+    drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+    drives_response = requests.get(drives_url, headers=headers)
+
+    print("DRIVES RESPONSE:", drives_response.json())
+
+    drives = drives_response.json().get("value", [])
+
+    if not drives:
+        raise Exception("No drives found")
+
+    # 👉 Pick correct drive (usually 'Documents')
+    drive_id = None
+    for d in drives:
+        if d["name"] in ["Documents", "Shared Documents"]:
+            drive_id = d["id"]
+            break
+
+    if not drive_id:
+        drive_id = drives[0]["id"]  # fallback
+
+    print("USING DRIVE:", drive_id)
+
+    # 🔹 STEP 3: Upload file
+    file_name = os.path.basename(file_path)
+
+    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{os.environ['SHAREPOINT_FOLDER']}/{file_name}:/content"
 
     with open(file_path, "rb") as f:
-        response = requests.put(upload_url, headers=headers, data=f)
+        upload_response = requests.put(upload_url, headers=headers, data=f)
 
-    print("UPLOAD RESPONSE:", response.text)
+    print("UPLOAD RESPONSE:", upload_response.text)
 
-    if response.status_code in [200, 201]:
+    if upload_response.status_code in [200, 201]:
         logging.info("✅ Upload successful")
     else:
-        raise Exception(f"Upload failed: {response.text}")
+        raise Exception(f"Upload failed: {upload_response.text}")
 
     # 🔹 Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
