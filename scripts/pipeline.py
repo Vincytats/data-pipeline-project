@@ -98,7 +98,7 @@ df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# AUTH TOKEN
+# AUTH TOKEN (AZURE)
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -107,105 +107,42 @@ def get_access_token():
         "client_id": os.environ["AZURE_CLIENT_ID"],
         "client_secret": os.environ["AZURE_CLIENT_SECRET"],
         "grant_type": "client_credentials",
-        "scope": "https://graph.microsoft.com/.default"
+        "scope": "https://{os.environ['SHAREPOINT_SITE_NAME']}/.default"
     }
 
     response = requests.post(url, data=data)
     return response.json()["access_token"]
 
 # =========================
-# UPLOAD FUNCTION
+# SHAREPOINT REST UPLOAD
 # =========================
 def upload_to_sharepoint(file_path):
-    logging.info("Uploading to SharePoint...")
+    logging.info("Uploading to SharePoint (REST API)...")
 
     token = get_access_token()
 
     headers = {
-        "Authorization": f"Bearer {token}"
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json;odata=verbose",
+        "Content-Type": "application/octet-stream"
     }
 
     file_name = os.path.basename(file_path)
 
-    # 🔥 DIRECT UPLOAD (NO SITE ID NEEDED)
-def upload_to_sharepoint(file_path):
-    logging.info("Uploading to SharePoint...")
+    # 🔥 IMPORTANT: EXACT FOLDER PATH
+    folder_url = "/sites/TheLearningTrust/Shared Documents/Consolidated data"
 
-    token = get_access_token()
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-
-    # 🔹 STEP 1: Get site using FULL URL (MOST RELIABLE)
-    site_lookup_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
-
-    site_response = requests.get(site_lookup_url, headers=headers)
-    print("SITE RESPONSE:", site_response.json())
-
-    if "id" not in site_response.json():
-        raise Exception(f"Failed to get site ID: {site_response.text}")
-
-    site_id = site_response.json()["id"]
-
-    # 🔹 STEP 2: Get drives (document libraries)
-    drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
-    drives_response = requests.get(drives_url, headers=headers)
-
-    print("DRIVES RESPONSE:", drives_response.json())
-
-    drives = drives_response.json().get("value", [])
-
-    if not drives:
-        raise Exception("No drives found")
-
-    # 👉 Pick correct drive (usually 'Documents')
-    drive_id = None
-    for d in drives:
-        if d["name"] in ["Documents", "Shared Documents"]:
-            drive_id = d["id"]
-            break
-
-    if not drive_id:
-        drive_id = drives[0]["id"]  # fallback
-
-    print("USING DRIVE:", drive_id)
-
-    # 🔹 STEP 3: Upload file
-    file_name = os.path.basename(file_path)
-
-    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{os.environ['SHAREPOINT_FOLDER']}/{file_name}:/content"
+    upload_url = f"https://{os.environ['SHAREPOINT_SITE_NAME']}/_api/web/GetFolderByServerRelativeUrl('{folder_url}')/Files/add(url='{file_name}',overwrite=true)"
 
     with open(file_path, "rb") as f:
-        upload_response = requests.put(upload_url, headers=headers, data=f)
+        response = requests.post(upload_url, headers=headers, data=f)
 
-    print("UPLOAD RESPONSE:", upload_response.text)
+    print("UPLOAD RESPONSE:", response.text)
 
-    if upload_response.status_code in [200, 201]:
+    if response.status_code in [200, 201]:
         logging.info("✅ Upload successful")
     else:
-        raise Exception(f"Upload failed: {upload_response.text}")
-
-    # 🔹 Get drive ID
-    drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
-    drive_response = requests.get(drive_url, headers=headers)
-
-    if "id" not in drive_response.json():
-        raise Exception(f"Failed to get drive ID: {drive_response.text}")
-
-    drive_id = drive_response.json()["id"]
-
-    file_name = os.path.basename(file_path)
-
-    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{os.environ['SHAREPOINT_FOLDER']}/{file_name}:/content"
-
-    with open(file_path, "rb") as f:
-        upload_response = requests.put(upload_url, headers=headers, data=f)
-
-    if upload_response.status_code in [200, 201]:
-        logging.info("✅ Upload successful")
-    else:
-        raise Exception(f"Upload failed: {upload_response.text}")
+        raise Exception(f"Upload failed: {response.text}")
 
 # =========================
 # RUN PIPELINE
