@@ -98,7 +98,7 @@ df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# AUTH TOKEN (AZURE)
+# AUTH TOKEN (FIXED)
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -107,10 +107,16 @@ def get_access_token():
         "client_id": os.environ["AZURE_CLIENT_ID"],
         "client_secret": os.environ["AZURE_CLIENT_SECRET"],
         "grant_type": "client_credentials",
-        "scope": "https://{os.environ['SHAREPOINT_SITE_NAME']}/.default"
+        "scope": "https://graph.microsoft.com/.default"
     }
 
     response = requests.post(url, data=data)
+
+    print("TOKEN RESPONSE:", response.json())  # debug
+
+    if "access_token" not in response.json():
+        raise Exception(f"Token error: {response.text}")
+
     return response.json()["access_token"]
 
 # =========================
@@ -129,7 +135,7 @@ def upload_to_sharepoint(file_path):
 
     file_name = os.path.basename(file_path)
 
-    # 🔥 IMPORTANT: EXACT FOLDER PATH
+    # 🔥 EXACT SERVER RELATIVE PATH
     folder_url = "/sites/TheLearningTrust/Shared Documents/Consolidated data"
 
     upload_url = f"https://{os.environ['SHAREPOINT_SITE_NAME']}/_api/web/GetFolderByServerRelativeUrl('{folder_url}')/Files/add(url='{file_name}',overwrite=true)"
