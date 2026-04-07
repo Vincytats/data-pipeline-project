@@ -9,6 +9,8 @@ import os
 # =========================
 logging.basicConfig(level=logging.INFO)
 
+print("PIPELINE VERSION FINAL RUNNING")
+
 # =========================
 # CONFIG
 # =========================
@@ -44,7 +46,7 @@ participants.rename(columns={"ID Number": "ID"}, inplace=True)
 wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
 
 # =========================
-# MERGE
+# MERGE DATA
 # =========================
 df = pd.merge(participants, wages, on="ID", how="left")
 
@@ -99,11 +101,10 @@ df.rename(columns={"ID": "ID Number"}, inplace=True)
 # SAVE FILE
 # =========================
 df.to_csv(OUTPUT_FILE, index=False)
-
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# SHAREPOINT UPLOAD
+# SHAREPOINT AUTH
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -118,7 +119,9 @@ def get_access_token():
     response = requests.post(url, data=data)
     return response.json()["access_token"]
 
-
+# =========================
+# UPLOAD TO SHAREPOINT
+# =========================
 def upload_to_sharepoint(file_path):
     logging.info("Uploading to SharePoint...")
 
@@ -128,32 +131,41 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-# Get site ID
-site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
+    # 🔹 Get site ID (FIXED FORMAT)
+    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
 
-response = requests.get(site_url, headers=headers)
-print("SITE RESPONSE:", response.json())
+    response = requests.get(site_url, headers=headers)
+    print("SITE RESPONSE:", response.json())
 
-site_id = response.json()["id"]
+    if "id" not in response.json():
+        raise Exception(f"Failed to get site ID: {response.text}")
 
-    # Get drive ID
+    site_id = response.json()["id"]
+
+    # 🔹 Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
-    drive_id = requests.get(drive_url, headers=headers).json()["id"]
+    drive_response = requests.get(drive_url, headers=headers)
+
+    if "id" not in drive_response.json():
+        raise Exception(f"Failed to get drive ID: {drive_response.text}")
+
+    drive_id = drive_response.json()["id"]
 
     file_name = os.path.basename(file_path)
 
     upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{os.environ['SHAREPOINT_FOLDER']}/{file_name}:/content"
 
     with open(file_path, "rb") as f:
-        response = requests.put(upload_url, headers=headers, data=f)
+        upload_response = requests.put(upload_url, headers=headers, data=f)
 
-    if response.status_code in [200, 201]:
-        logging.info("Upload successful")
+    if upload_response.status_code in [200, 201]:
+        logging.info("✅ Upload successful")
     else:
-        logging.error(f"Upload failed: {response.text}")
+        raise Exception(f"Upload failed: {upload_response.text}")
 
-
-# Run upload
+# =========================
+# RUN UPLOAD
+# =========================
 upload_to_sharepoint(OUTPUT_FILE)
 
-logging.info("Pipeline complete")
+logging.info("🎉 PIPELINE COMPLETE")
