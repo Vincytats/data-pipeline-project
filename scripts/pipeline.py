@@ -37,7 +37,7 @@ wages = load_sheet(wages_url)
 logging.info("Sheets downloaded")
 
 # =========================
-# CLEAN
+# CLEAN DATA
 # =========================
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
@@ -53,7 +53,7 @@ df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
 # =========================
-# NUMERIC CLEAN
+# NUMERIC CLEANING
 # =========================
 numeric_columns = [
     "Days worked",
@@ -98,7 +98,7 @@ df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# AUTH
+# AUTH TOKEN
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -122,20 +122,19 @@ def upload_to_sharepoint(file_path):
     token = get_access_token()
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 🔹 SAFE SITE SEARCH (FIXED)
-    search_url = "https://graph.microsoft.com/v1.0/sites?search=TheLearningTrust"
-    search_response = requests.get(search_url, headers=headers)
+    # 🔥 CORRECT SITE URL (WITH TRAILING COLON)
+    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust:"
 
-    print("SEARCH RESPONSE:", search_response.json())
+    response = requests.get(site_url, headers=headers)
 
-    sites = search_response.json().get("value", [])
-    if not sites:
-        raise Exception("No SharePoint sites found")
+    print("SITE RESPONSE:", response.json())
 
-    site_id = sites[0]["id"]
-    print("USING SITE ID:", site_id)
+    if "id" not in response.json():
+        raise Exception(f"Failed to get site ID: {response.text}")
 
-    # 🔹 GET DRIVE
+    site_id = response.json()["id"]
+
+    # 🔹 Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
     drive_response = requests.get(drive_url, headers=headers)
 
@@ -157,7 +156,7 @@ def upload_to_sharepoint(file_path):
         raise Exception(f"Upload failed: {upload_response.text}")
 
 # =========================
-# RUN
+# RUN PIPELINE
 # =========================
 upload_to_sharepoint(OUTPUT_FILE)
 
