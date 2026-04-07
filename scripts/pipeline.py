@@ -120,19 +120,25 @@ def upload_to_sharepoint(file_path):
     logging.info("Uploading to SharePoint...")
 
     token = get_access_token()
-    headers = {"Authorization": f"Bearer {token}"}
 
-    # 🔥 CORRECT SITE URL (WITH TRAILING COLON)
-    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust:"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
 
-    response = requests.get(site_url, headers=headers)
+    file_name = os.path.basename(file_path)
 
-    print("SITE RESPONSE:", response.json())
+    # 🔥 DIRECT UPLOAD (NO SITE ID NEEDED)
+    upload_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust:/drive/root:/{os.environ['SHAREPOINT_FOLDER']}/{file_name}:/content"
 
-    if "id" not in response.json():
-        raise Exception(f"Failed to get site ID: {response.text}")
+    with open(file_path, "rb") as f:
+        response = requests.put(upload_url, headers=headers, data=f)
 
-    site_id = response.json()["id"]
+    print("UPLOAD RESPONSE:", response.text)
+
+    if response.status_code in [200, 201]:
+        logging.info("✅ Upload successful")
+    else:
+        raise Exception(f"Upload failed: {response.text}")
 
     # 🔹 Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
