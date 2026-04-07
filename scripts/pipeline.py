@@ -122,8 +122,8 @@ def get_access_token():
 # =========================
 # SHAREPOINT REST UPLOAD
 # =========================
-def upload_to_sharepoint(file_path):
-    logging.info("Uploading to SharePoint (Graph API - final)...")
+def upload_to_onedrive(file_path):
+    logging.info("Uploading to OneDrive (Graph)...")
 
     token = get_access_token()
 
@@ -131,39 +131,20 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-    # 🔹 Step 1: Get site ID (CORRECT FORMAT)
-    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust:"
+    file_name = os.path.basename(file_path)
 
-    site_response = requests.get(site_url, headers=headers)
-    print("SITE RESPONSE:", site_response.json())
+    # 🔥 THIS IS THE MAGIC LINE
+    upload_url = f"https://graph.microsoft.com/v1.0/me/drive/root:/Consolidated data/{file_name}:/content"
 
-    if "id" not in site_response.json():
-        raise Exception(f"Site error: {site_response.text}")
+    with open(file_path, "rb") as f:
+        response = requests.put(upload_url, headers=headers, data=f)
 
-    site_id = site_response.json()["id"]
+    print("UPLOAD RESPONSE:", response.text)
 
-    # 🔹 Step 2: Get drives
-    drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
-    drives_response = requests.get(drives_url, headers=headers)
-
-    print("DRIVES RESPONSE:", drives_response.json())
-
-    drives = drives_response.json().get("value", [])
-
-    if not drives:
-        raise Exception("No drives found")
-
-    # Pick the Documents library
-    drive_id = None
-    for d in drives:
-        if d["name"] in ["Documents", "Shared Documents"]:
-            drive_id = d["id"]
-            break
-
-    if not drive_id:
-        drive_id = drives[0]["id"]
-
-    print("USING DRIVE:", drive_id)
+    if response.status_code in [200, 201]:
+        logging.info("✅ Upload successful")
+    else:
+        raise Exception(f"Upload failed: {response.text}")
 
     # 🔹 Step 3: Upload file
     file_name = os.path.basename(file_path)
