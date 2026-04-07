@@ -128,9 +128,13 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-    # Get site ID
-    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:{os.environ['SHAREPOINT_SITE_PATH']}"
-    site_id = requests.get(site_url, headers=headers).json()["id"]
+# Get site ID
+site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
+
+response = requests.get(site_url, headers=headers)
+print("SITE RESPONSE:", response.json())
+
+site_id = response.json()["id"]
 
     # Get drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
