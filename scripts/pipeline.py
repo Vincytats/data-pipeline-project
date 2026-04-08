@@ -4,15 +4,12 @@ from io import StringIO
 import logging
 import os
 
-# =========================
-# LOGGING
-# =========================
 logging.basicConfig(level=logging.INFO)
 
 print("PIPELINE VERSION FINAL RUNNING")
 
 # =========================
-# CONFIG
+# GOOGLE SHEETS
 # =========================
 participants_id = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 wages_id = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
@@ -37,7 +34,7 @@ wages = load_sheet(wages_url)
 logging.info("Sheets downloaded")
 
 # =========================
-# CLEAN DATA
+# CLEAN
 # =========================
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
@@ -46,14 +43,13 @@ participants.rename(columns={"ID Number": "ID"}, inplace=True)
 wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
 
 df = pd.merge(participants, wages, on="ID", how="left")
-
 logging.info("Datasets merged")
 
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
 # =========================
-# NUMERIC CLEANING
+# NUMERIC FIX
 # =========================
 numeric_columns = [
     "Days worked",
@@ -69,7 +65,7 @@ for col in numeric_columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
 # =========================
-# SELECT COLUMNS
+# FINAL COLUMNS
 # =========================
 required_columns = [
     "ID",
@@ -92,13 +88,13 @@ df = df[[c for c in required_columns if c in df.columns]]
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
 # =========================
-# SAVE FILE
+# SAVE
 # =========================
 df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 # =========================
-# AUTH TOKEN
+# AUTH
 # =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
@@ -110,20 +106,19 @@ def get_access_token():
         "scope": "https://graph.microsoft.com/.default"
     }
 
-    response = requests.post(url, data=data)
+    r = requests.post(url, data=data)
+    token_data = r.json()
 
-    print("TOKEN RESPONSE:", response.json())
+    if "access_token" not in token_data:
+        raise Exception(f"TOKEN ERROR: {token_data}")
 
-    if "access_token" not in response.json():
-        raise Exception(f"Token error: {response.text}")
-
-    return response.json()["access_token"]
+    return token_data["access_token"]
 
 # =========================
-# UPLOAD TO SHAREPOINT (DOCUMENTS LIBRARY)
+# UPLOAD (CORRECT VERSION)
 # =========================
 def upload_to_sharepoint(file_path):
-    logging.info("Uploading to SharePoint Document Library...")
+    logging.info("Uploading to SharePoint...")
 
     token = get_access_token()
 
@@ -131,42 +126,42 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-    # STEP 1: GET SITE
-    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
-    site_response = requests.get(site_url, headers=headers)
+    # 🔥 THIS IS THE KEY FIX
+    site_url = "https://graph.microsoft.com/v1.0/sites/thelearningtrust.sharepoint.com:/sites/TheLearningTrust"
 
-    print("SITE RESPONSE:", site_response.json())
+    site = requests.get(site_url, headers=headers).json()
 
-    if "id" not in site_response.json():
-        raise Exception(f"Site error: {site_response.text}")
+    print("SITE:", site)
 
-    site_id = site_response.json()["id"]
+    if "id" not in site:
+        raise Exception(f"Site error: {site}")
 
-    # STEP 2: GET DRIVE (Documents library)
-    drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
-    drive_response = requests.get(drive_url, headers=headers)
+    site_id = site["id"]
 
-    print("DRIVE RESPONSE:", drive_response.json())
+    # GET DRIVE
+    drive = requests.get(
+        f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive",
+        headers=headers
+    ).json()
 
-    if "id" not in drive_response.json():
-        raise Exception(f"Drive error: {drive_response.text}")
+    print("DRIVE:", drive)
 
-    drive_id = drive_response.json()["id"]
+    drive_id = drive["id"]
 
-    # STEP 3: UPLOAD FILE
     file_name = os.path.basename(file_path)
 
+    # 🔥 FINAL UPLOAD PATH
     upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{file_name}:/content"
 
     with open(file_path, "rb") as f:
-        upload_response = requests.put(upload_url, headers=headers, data=f)
+        res = requests.put(upload_url, headers=headers, data=f)
 
-    print("UPLOAD RESPONSE:", upload_response.text)
+    print("UPLOAD:", res.text)
 
-    if upload_response.status_code in [200, 201]:
-        logging.info("✅ Upload successful")
-    else:
-        raise Exception(f"Upload failed: {upload_response.text}")
+    if res.status_code not in [200, 201]:
+        raise Exception(f"Upload failed: {res.text}")
+
+    logging.info("✅ Upload successful")
 
 # =========================
 # RUN
