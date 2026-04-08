@@ -120,10 +120,10 @@ def get_access_token():
     return response.json()["access_token"]
 
 # =========================
-# ONEDRIVE UPLOAD
+# UPLOAD TO SHAREPOINT (DOCUMENTS LIBRARY)
 # =========================
-def upload_to_onedrive(file_path):
-    logging.info("Uploading to OneDrive (Graph)...")
+def upload_to_sharepoint(file_path):
+    logging.info("Uploading to SharePoint Document Library...")
 
     token = get_access_token()
 
@@ -131,24 +131,46 @@ def upload_to_onedrive(file_path):
         "Authorization": f"Bearer {token}"
     }
 
+    # STEP 1: GET SITE
+    site_url = f"https://graph.microsoft.com/v1.0/sites/{os.environ['SHAREPOINT_SITE_NAME']}:/sites/TheLearningTrust"
+    site_response = requests.get(site_url, headers=headers)
+
+    print("SITE RESPONSE:", site_response.json())
+
+    if "id" not in site_response.json():
+        raise Exception(f"Site error: {site_response.text}")
+
+    site_id = site_response.json()["id"]
+
+    # STEP 2: GET DRIVE (Documents library)
+    drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
+    drive_response = requests.get(drive_url, headers=headers)
+
+    print("DRIVE RESPONSE:", drive_response.json())
+
+    if "id" not in drive_response.json():
+        raise Exception(f"Drive error: {drive_response.text}")
+
+    drive_id = drive_response.json()["id"]
+
+    # STEP 3: UPLOAD FILE
     file_name = os.path.basename(file_path)
 
-    # 🔥 IMPORTANT: Use USER (not /me because this is app auth)
-    upload_url = f"https://graph.microsoft.com/v1.0/users/{os.environ['ONEDRIVE_USER']}/drive/root:/Consolidated data/{file_name}:/content"
+    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{file_name}:/content"
 
     with open(file_path, "rb") as f:
-        response = requests.put(upload_url, headers=headers, data=f)
+        upload_response = requests.put(upload_url, headers=headers, data=f)
 
-    print("UPLOAD RESPONSE:", response.text)
+    print("UPLOAD RESPONSE:", upload_response.text)
 
-    if response.status_code in [200, 201]:
+    if upload_response.status_code in [200, 201]:
         logging.info("✅ Upload successful")
     else:
-        raise Exception(f"Upload failed: {response.text}")
+        raise Exception(f"Upload failed: {upload_response.text}")
 
 # =========================
-# RUN PIPELINE
+# RUN
 # =========================
-upload_to_onedrive(OUTPUT_FILE)
+upload_to_sharepoint(OUTPUT_FILE)
 
 logging.info("🎉 PIPELINE COMPLETE")
