@@ -8,20 +8,14 @@ logging.basicConfig(level=logging.INFO)
 
 print("PIPELINE VERSION FINAL RUNNING")
 
-# =========================
-# GOOGLE SHEETS
-# =========================
 participants_id = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
 wages_id = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
 participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
 wages_url = f"https://docs.google.com/spreadsheets/d/{wages_id}/export?format=csv"
 
-OUTPUT_FILE = "processed_participant_data.csv"
+OUTPUT_FILE = "Consolidated Participant Data.csv"
 
-# =========================
-# LOAD DATA
-# =========================
 def load_sheet(url):
     r = requests.get(url)
     if r.status_code != 200:
@@ -33,9 +27,6 @@ wages = load_sheet(wages_url)
 
 logging.info("Sheets downloaded")
 
-# =========================
-# CLEAN
-# =========================
 participants.columns = participants.columns.str.strip()
 wages.columns = wages.columns.str.strip()
 
@@ -48,9 +39,6 @@ logging.info("Datasets merged")
 df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
-# =========================
-# NUMERIC FIX
-# =========================
 numeric_columns = [
     "Days worked",
     "Nett Wages Paid",
@@ -64,9 +52,6 @@ for col in numeric_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# =========================
-# FINAL COLUMNS
-# =========================
 required_columns = [
     "ID",
     "Wage category",
@@ -87,15 +72,9 @@ required_columns = [
 df = df[[c for c in required_columns if c in df.columns]]
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
-# =========================
-# SAVE
-# =========================
 df.to_csv(OUTPUT_FILE, index=False)
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
-# =========================
-# AUTH
-# =========================
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
 
@@ -114,9 +93,6 @@ def get_access_token():
 
     return token_data["access_token"]
 
-# =========================
-# UPLOAD (CORRECT VERSION)
-# =========================
 def upload_to_sharepoint(file_path):
     logging.info("Uploading to SharePoint...")
 
@@ -126,7 +102,6 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {token}"
     }
 
-    # 🔥 THIS IS THE KEY FIX
     site_url = "https://graph.microsoft.com/v1.0/sites/thelearningtrust.sharepoint.com:/sites/TheLearningTrust"
 
     site = requests.get(site_url, headers=headers).json()
@@ -138,7 +113,6 @@ def upload_to_sharepoint(file_path):
 
     site_id = site["id"]
 
-    # GET DRIVE
     drive = requests.get(
         f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive",
         headers=headers
@@ -150,7 +124,6 @@ def upload_to_sharepoint(file_path):
 
     file_name = os.path.basename(file_path)
 
-    # 🔥 FINAL UPLOAD PATH
     upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{file_name}:/content"
 
     with open(file_path, "rb") as f:
@@ -161,11 +134,8 @@ def upload_to_sharepoint(file_path):
     if res.status_code not in [200, 201]:
         raise Exception(f"Upload failed: {res.text}")
 
-    logging.info("✅ Upload successful")
+    logging.info("Upload successful")
 
-# =========================
-# RUN
-# =========================
 upload_to_sharepoint(OUTPUT_FILE)
 
-logging.info("🎉 PIPELINE COMPLETE")
+logging.info("PIPELINE COMPLETE")
