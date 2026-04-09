@@ -38,6 +38,13 @@ def standardize_id_column(df):
             return df
     raise Exception(f"ID column not found in columns: {df.columns.tolist()}")
 
+def standardize_gender_column(df):
+    for col in df.columns:
+        if "gender" in col.lower():
+            df.rename(columns={col: "Gender"}, inplace=True)
+            return df
+    return df
+
 def clean_id(series):
     return (
         series.astype(str)
@@ -80,6 +87,7 @@ for wid, name in wages_ids:
 
     wages = clean_columns(wages)
     wages = standardize_id_column(wages)
+    wages = standardize_gender_column(wages)
     wages["ID"] = clean_id(wages["ID"])
 
     month_recorded, payment_date = extract_month_info(name)
@@ -119,7 +127,8 @@ df = df[
 df = df.sort_values(by=["ID", "Month_recorded", "Nett Wages Paid"], ascending=[True, True, False])
 df = df.drop_duplicates(subset=["ID", "Month_recorded"], keep="first")
 
-df = df[df["Gender"].notna()]
+if "Gender" in df.columns:
+    df = df[df["Gender"].notna()]
 
 required_columns = [
     "ID",
