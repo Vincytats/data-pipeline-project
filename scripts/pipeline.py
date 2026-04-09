@@ -25,6 +25,19 @@ def load_sheet(url):
         raise Exception("Failed to download sheet")
     return pd.read_csv(StringIO(r.text))
 
+def clean_columns(df):
+    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.replace(r"\s+", " ", regex=True)
+    return df
+
+def standardize_id_column(df):
+    for col in df.columns:
+        col_clean = col.lower().strip()
+        if "id number" in col_clean or "id number/non sa passport" in col_clean or col_clean == "id":
+            df.rename(columns={col: "ID"}, inplace=True)
+            return df
+    raise Exception(f"ID column not found in columns: {df.columns.tolist()}")
+
 def extract_month_info(name):
     match = re.search(r"([A-Za-z]+)\s(\d{4})", name)
     if not match:
@@ -47,8 +60,8 @@ def extract_month_info(name):
 participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
 participants = load_sheet(participants_url)
 
-participants.columns = participants.columns.str.strip()
-participants.rename(columns={"ID Number": "ID"}, inplace=True)
+participants = clean_columns(participants)
+participants = standardize_id_column(participants)
 
 wages_list = []
 
@@ -56,8 +69,8 @@ for wid, name in wages_ids:
     wages_url = f"https://docs.google.com/spreadsheets/d/{wid}/export?format=csv"
     wages = load_sheet(wages_url)
 
-    wages.columns = wages.columns.str.strip()
-    wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
+    wages = clean_columns(wages)
+    wages = standardize_id_column(wages)
 
     month_recorded, payment_date = extract_month_info(name)
 
