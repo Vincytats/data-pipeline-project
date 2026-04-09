@@ -15,8 +15,6 @@ wages_ids = [
     ("11SIHx6STP429fgtf19qV-e8Tk3Rb4xR-t_Bvy8ChpJo", "March 2026 Financial Report")
 ]
 
-participants_id = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
-
 OUTPUT_FILE = "Consolidated Participant Data.csv"
 
 def load_sheet(url):
@@ -32,11 +30,10 @@ def clean_columns(df):
 
 def standardize_id_column(df):
     for col in df.columns:
-        col_clean = col.lower().strip()
-        if "id number" in col_clean or "id number/non sa passport" in col_clean or col_clean == "id":
+        if "id" in col.lower():
             df.rename(columns={col: "ID"}, inplace=True)
             return df
-    raise Exception(f"ID column not found in columns: {df.columns.tolist()}")
+    raise Exception(f"ID column not found: {df.columns.tolist()}")
 
 def standardize_gender_column(df):
     for col in df.columns:
@@ -61,23 +58,15 @@ def extract_month_info(name):
 
     month_str = month_str.capitalize()
 
+    import calendar
     if month_str in calendar.month_name:
         month_number = list(calendar.month_name).index(month_str)
-    elif month_str in calendar.month_abbr:
-        month_number = list(calendar.month_abbr).index(month_str)
     else:
-        raise ValueError(f"Invalid month: {month_str}")
+        month_number = list(calendar.month_abbr).index(month_str)
 
     last_day = calendar.monthrange(int(year), month_number)[1]
 
     return f"{month_str} {year} Report", f"{last_day:02d}/{month_number:02d}/{year}"
-
-participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
-participants = load_sheet(participants_url)
-
-participants = clean_columns(participants)
-participants = standardize_id_column(participants)
-participants["ID"] = clean_id(participants["ID"])
 
 wages_list = []
 
@@ -88,6 +77,7 @@ for wid, name in wages_ids:
     wages = clean_columns(wages)
     wages = standardize_id_column(wages)
     wages = standardize_gender_column(wages)
+
     wages["ID"] = clean_id(wages["ID"])
 
     month_recorded, payment_date = extract_month_info(name)
@@ -97,14 +87,9 @@ for wid, name in wages_ids:
 
     wages_list.append(wages)
 
-wages = pd.concat(wages_list, ignore_index=True)
+df = pd.concat(wages_list, ignore_index=True)
 
-logging.info("Sheets downloaded and combined")
-
-df = pd.merge(participants, wages, on="ID", how="left")
-logging.info("Datasets merged")
-
-df.dropna(subset=["ID"], inplace=True)
+logging.info("All wages files combined")
 
 numeric_columns = [
     "Days worked",
