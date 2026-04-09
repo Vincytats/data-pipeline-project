@@ -1,6 +1,6 @@
 import pandas as pd
 import requests
-from io import StringIO
+from io import BytesIO
 import logging
 import os
 import calendar
@@ -15,30 +15,23 @@ wages_ids = [
     ("11SIHx6STP429fgtf19qV-e8Tk3Rb4xR-t_Bvy8ChpJo", "March 2026 Financial Report")
 ]
 
-OUTPUT_FILE = "Consolidated Participant Data.csv"
+OUTPUT_FILE = "Consolidated Participant Data.xlsx"
 
 def load_sheet(url):
     r = requests.get(url)
     if r.status_code != 200:
         raise Exception("Failed to download sheet")
-    return pd.read_csv(StringIO(r.text), dtype=str)
+    return pd.read_csv(BytesIO(r.content), dtype=str)
 
 def clean_columns(df):
     df.columns = df.columns.str.strip()
     df.columns = df.columns.str.replace(r"\s+", " ", regex=True)
     return df
 
-def standardize_id_column(df):
+def standardize_column(df, keyword, new_name):
     for col in df.columns:
-        if "id" in col.lower():
-            df.rename(columns={col: "ID"}, inplace=True)
-            return df
-    raise Exception(f"ID column not found: {df.columns.tolist()}")
-
-def standardize_gender_column(df):
-    for col in df.columns:
-        if "gender" in col.lower():
-            df.rename(columns={col: "Gender"}, inplace=True)
+        if keyword in col.lower():
+            df.rename(columns={col: new_name}, inplace=True)
             return df
     return df
 
@@ -47,7 +40,7 @@ def clean_id(series):
         series.astype(str)
         .str.replace(r"\.0$", "", regex=True)
         .str.replace(r"[^\d]", "", regex=True)
-        .str.strip()
+        .str.zfill(13)
     )
 
 def extract_month_info(name):
@@ -58,7 +51,6 @@ def extract_month_info(name):
 
     month_str = month_str.capitalize()
 
-    import calendar
     if month_str in calendar.month_name:
         month_number = list(calendar.month_name).index(month_str)
     else:
@@ -71,21 +63,21 @@ def extract_month_info(name):
 wages_list = []
 
 for wid, name in wages_ids:
-    wages_url = f"https://docs.google.com/spreadsheets/d/{wid}/export?format=csv"
-    wages = load_sheet(wages_url)
+    url = f"https://docs.google.com/spreadsheets/d/{wid}/export?format=csv"
+    df = load_sheet(url)
 
-    wages = clean_columns(wages)
-    wages = standardize_id_column(wages)
-    wages = standardize_gender_column(wages)
+    df = clean_columns(df)
+    df = standardize_column(df, "id", "ID")
+    df = standardize_column(df, "gender", "Gender")
 
-    wages["ID"] = clean_id(wages["ID"])
+    df["ID"] = clean_id(df["ID"])
 
     month_recorded, payment_date = extract_month_info(name)
 
-    wages["Month_recorded"] = month_recorded
-    wages["Payment_Date"] = payment_date
+    df["Month_recorded"] = month_recorded
+    df["Payment_Date"] = payment_date
 
-    wages_list.append(wages)
+    wages_list.append(df)
 
 df = pd.concat(wages_list, ignore_index=True)
 
@@ -112,9 +104,6 @@ df = df[
 df = df.sort_values(by=["ID", "Month_recorded", "Nett Wages Paid"], ascending=[True, True, False])
 df = df.drop_duplicates(subset=["ID", "Month_recorded"], keep="first")
 
-if "Gender" in df.columns:
-    df = df[df["Gender"].notna()]
-
 required_columns = [
     "ID",
     "Wage category",
@@ -138,9 +127,16 @@ df = df[[c for c in required_columns if c in df.columns]]
 
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
-df.to_csv(OUTPUT_FILE, index=False)
+with pd.ExcelWriter(OUTPUT_FILE, engine="xlsxwriter") as writer:
+    df.to_excel(writer, index=False, sheet_name="Data")
 
-logging.info(f"CSV created: {OUTPUT_FILE}")
+    workbook = writer.book
+    worksheet = writer.sheets["Data"]
+
+    text_format = workbook.add_format({'num_format': '@'})
+    worksheet.set_column('A:A', 20, text_format)
+
+logging.info(f"Excel created: {OUTPUT_FILE}")
 
 def get_access_token():
     url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
