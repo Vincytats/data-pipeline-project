@@ -1,6 +1,6 @@
 import pandas as pd
 import requests
-from io import BytesIO
+from io import StringIO
 import logging
 import os
 import calendar
@@ -15,13 +15,13 @@ wages_ids = [
     ("11SIHx6STP429fgtf19qV-e8Tk3Rb4xR-t_Bvy8ChpJo", "March 2026 Financial Report")
 ]
 
-OUTPUT_FILE = "Consolidated Participant Data.xlsx"
+OUTPUT_FILE = "Consolidated Participant Data.csv"
 
 def load_sheet(url):
     r = requests.get(url)
     if r.status_code != 200:
         raise Exception("Failed to download sheet")
-    return pd.read_csv(BytesIO(r.content), dtype=str)
+    return pd.read_csv(StringIO(r.text), dtype=str)
 
 def clean_columns(df):
     df.columns = df.columns.str.strip()
@@ -127,72 +127,9 @@ df = df[[c for c in required_columns if c in df.columns]]
 
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
-with pd.ExcelWriter(OUTPUT_FILE, engine="xlsxwriter") as writer:
-    df.to_excel(writer, index=False, sheet_name="Data")
+# 🔥 Force Excel-safe text format
+df["ID Number"] = '="' + df["ID Number"] + '"'
 
-    workbook = writer.book
-    worksheet = writer.sheets["Data"]
+df.to_csv(OUTPUT_FILE, index=False)
 
-    text_format = workbook.add_format({'num_format': '@'})
-    worksheet.set_column('A:A', 20, text_format)
-
-logging.info(f"Excel created: {OUTPUT_FILE}")
-
-def get_access_token():
-    url = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/token"
-
-    data = {
-        "client_id": os.environ["AZURE_CLIENT_ID"],
-        "client_secret": os.environ["AZURE_CLIENT_SECRET"],
-        "grant_type": "client_credentials",
-        "scope": "https://graph.microsoft.com/.default"
-    }
-
-    r = requests.post(url, data=data)
-    token_data = r.json()
-
-    if "access_token" not in token_data:
-        raise Exception(f"TOKEN ERROR: {token_data}")
-
-    return token_data["access_token"]
-
-def upload_to_sharepoint(file_path):
-    logging.info("Uploading to SharePoint...")
-
-    token = get_access_token()
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-
-    site_url = "https://graph.microsoft.com/v1.0/sites/thelearningtrust.sharepoint.com:/sites/TheLearningTrust"
-
-    site = requests.get(site_url, headers=headers).json()
-
-    if "id" not in site:
-        raise Exception(f"Site error: {site}")
-
-    site_id = site["id"]
-
-    drive = requests.get(
-        f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive",
-        headers=headers
-    ).json()
-
-    drive_id = drive["id"]
-
-    file_name = os.path.basename(file_path)
-
-    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{file_name}:/content"
-
-    with open(file_path, "rb") as f:
-        res = requests.put(upload_url, headers=headers, data=f)
-
-    if res.status_code not in [200, 201]:
-        raise Exception(f"Upload failed: {res.text}")
-
-    logging.info("Upload successful")
-
-upload_to_sharepoint(OUTPUT_FILE)
-
-logging.info("PIPELINE COMPLETE")
+logging.info(f"CSV created: {OUTPUT_FILE}")
