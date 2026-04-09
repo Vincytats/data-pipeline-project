@@ -3,16 +3,19 @@ import requests
 from io import StringIO
 import logging
 import os
+import calendar
+import re
 
 logging.basicConfig(level=logging.INFO)
 
 print("PIPELINE VERSION FINAL RUNNING")
 
-participants_id = "1phSN8yTzWtnfbvacDIqhqWuD81JKu9DDrzb2q06VdjA"
-wages_id = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
+wages_ids = [
+    ("1gcfLed3IjEg8SKoH3R2Q8Coawld5yiLiEvIcI45UOJ8", "Feb 2026 Financial Report"),
+    ("11SIHx6STP429fgtf19qV-e8Tk3Rb4xR-t_Bvy8ChpJo", "March 2026 Financial Report")
+]
 
-participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
-wages_url = f"https://docs.google.com/spreadsheets/d/{wages_id}/export?format=csv"
+participants_id = "1x2Uy8L1l0x10YBDLLjIk91shMlTXsMtEPapCssXN1iU"
 
 OUTPUT_FILE = "Consolidated Participant Data.csv"
 
@@ -22,21 +25,44 @@ def load_sheet(url):
         raise Exception("Failed to download sheet")
     return pd.read_csv(StringIO(r.text))
 
-participants = load_sheet(participants_url)
-wages = load_sheet(wages_url)
+def extract_month_info(name):
+    match = re.search(r"([A-Za-z]+)\s(\d{4})", name)
+    if not match:
+        return None, None, None
+    month_str, year = match.groups()
+    month_number = list(calendar.month_name).index(month_str)
+    last_day = calendar.monthrange(int(year), month_number)[1]
+    return f"{month_str} {year} Report", f"{last_day:02d}/{month_number:02d}/{year}"
 
-logging.info("Sheets downloaded")
+participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
+participants = load_sheet(participants_url)
 
 participants.columns = participants.columns.str.strip()
-wages.columns = wages.columns.str.strip()
-
 participants.rename(columns={"ID Number": "ID"}, inplace=True)
-wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
+
+wages_list = []
+
+for wid, name in wages_ids:
+    wages_url = f"https://docs.google.com/spreadsheets/d/{wid}/export?format=csv"
+    wages = load_sheet(wages_url)
+
+    wages.columns = wages.columns.str.strip()
+    wages.rename(columns={"ID number/Non SA Passport": "ID"}, inplace=True)
+
+    month_recorded, payment_date = extract_month_info(name)
+
+    wages["Month_recorded"] = month_recorded
+    wages["Payment_Date"] = payment_date
+
+    wages_list.append(wages)
+
+wages = pd.concat(wages_list, ignore_index=True)
+
+logging.info("Sheets downloaded and combined")
 
 df = pd.merge(participants, wages, on="ID", how="left")
 logging.info("Datasets merged")
 
-df.drop_duplicates(inplace=True)
 df.dropna(subset=["ID"], inplace=True)
 
 numeric_columns = [
@@ -52,6 +78,8 @@ for col in numeric_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+df.drop_duplicates(subset=["ID", "Month_recorded"], inplace=True)
+
 required_columns = [
     "ID",
     "Wage category",
@@ -66,10 +94,13 @@ required_columns = [
     "Youth / Adult",
     "Date Paid",
     "Date Paid_recoded",
-    "New Wage Category"
+    "New Wage Category",
+    "Month_recorded",
+    "Payment_Date"
 ]
 
 df = df[[c for c in required_columns if c in df.columns]]
+
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
 df.to_csv(OUTPUT_FILE, index=False)
