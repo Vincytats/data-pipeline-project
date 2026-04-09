@@ -28,10 +28,20 @@ def load_sheet(url):
 def extract_month_info(name):
     match = re.search(r"([A-Za-z]+)\s(\d{4})", name)
     if not match:
-        return None, None, None
+        return None, None
     month_str, year = match.groups()
-    month_number = list(calendar.month_name).index(month_str)
+
+    month_str = month_str.capitalize()
+
+    if month_str in calendar.month_name:
+        month_number = list(calendar.month_name).index(month_str)
+    elif month_str in calendar.month_abbr:
+        month_number = list(calendar.month_abbr).index(month_str)
+    else:
+        raise ValueError(f"Invalid month: {month_str}")
+
     last_day = calendar.monthrange(int(year), month_number)[1]
+
     return f"{month_str} {year} Report", f"{last_day:02d}/{month_number:02d}/{year}"
 
 participants_url = f"https://docs.google.com/spreadsheets/d/{participants_id}/export?format=csv"
