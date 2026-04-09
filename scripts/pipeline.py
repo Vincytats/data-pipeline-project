@@ -2,7 +2,6 @@ import pandas as pd
 import requests
 from io import StringIO
 import logging
-import os
 import calendar
 import re
 
@@ -83,26 +82,7 @@ df = pd.concat(wages_list, ignore_index=True)
 
 logging.info("All wages files combined")
 
-numeric_columns = [
-    "Days worked",
-    "Nett Wages Paid",
-    "Nett Wages Due",
-    "UIF (Participant)",
-    "SDL",
-    "Age"
-]
-
-for col in numeric_columns:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-df = df[
-    df["Nett Wages Paid"].notna() &
-    df["Days worked"].notna()
-]
-
-df = df.sort_values(by=["ID", "Month_recorded", "Nett Wages Paid"], ascending=[True, True, False])
-df = df.drop_duplicates(subset=["ID", "Month_recorded"], keep="first")
+df = df[df["ID"].notna() & (df["ID"] != "")]
 
 required_columns = [
     "ID",
@@ -127,7 +107,7 @@ df = df[[c for c in required_columns if c in df.columns]]
 
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
-# 🔥 Force Excel-safe text format
+# Excel-safe ID format
 df["ID Number"] = '="' + df["ID Number"] + '"'
 
 df.to_csv(OUTPUT_FILE, index=False)
