@@ -119,6 +119,8 @@ df = df[
 df = df.sort_values(by=["ID", "Month_recorded", "Nett Wages Paid"], ascending=[True, True, False])
 df = df.drop_duplicates(subset=["ID", "Month_recorded"], keep="first")
 
+df = df[df["Gender"].notna()]
+
 required_columns = [
     "ID",
     "Wage category",
@@ -139,8 +141,6 @@ required_columns = [
 ]
 
 df = df[[c for c in required_columns if c in df.columns]]
-
-df = df.dropna(subset=["Gender"])
 
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
