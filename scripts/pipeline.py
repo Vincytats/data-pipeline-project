@@ -23,7 +23,7 @@ def load_sheet(url):
     r = requests.get(url)
     if r.status_code != 200:
         raise Exception("Failed to download sheet")
-    return pd.read_csv(StringIO(r.text))
+    return pd.read_csv(StringIO(r.text), dtype=str)
 
 def clean_columns(df):
     df.columns = df.columns.str.strip()
@@ -37,6 +37,14 @@ def standardize_id_column(df):
             df.rename(columns={col: "ID"}, inplace=True)
             return df
     raise Exception(f"ID column not found in columns: {df.columns.tolist()}")
+
+def clean_id(series):
+    return (
+        series.astype(str)
+        .str.replace(r"\.0$", "", regex=True)
+        .str.replace(r"[^\d]", "", regex=True)
+        .str.strip()
+    )
 
 def extract_month_info(name):
     match = re.search(r"([A-Za-z]+)\s(\d{4})", name)
@@ -62,6 +70,7 @@ participants = load_sheet(participants_url)
 
 participants = clean_columns(participants)
 participants = standardize_id_column(participants)
+participants["ID"] = clean_id(participants["ID"])
 
 wages_list = []
 
@@ -71,6 +80,7 @@ for wid, name in wages_ids:
 
     wages = clean_columns(wages)
     wages = standardize_id_column(wages)
+    wages["ID"] = clean_id(wages["ID"])
 
     month_recorded, payment_date = extract_month_info(name)
 
@@ -101,7 +111,13 @@ for col in numeric_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-df.drop_duplicates(subset=["ID", "Month_recorded"], inplace=True)
+df = df[
+    df["Nett Wages Paid"].notna() &
+    df["Days worked"].notna()
+]
+
+df = df.sort_values(by=["ID", "Month_recorded", "Nett Wages Paid"], ascending=[True, True, False])
+df = df.drop_duplicates(subset=["ID", "Month_recorded"], keep="first")
 
 required_columns = [
     "ID",
@@ -124,9 +140,12 @@ required_columns = [
 
 df = df[[c for c in required_columns if c in df.columns]]
 
+df = df.dropna(subset=["Gender"])
+
 df.rename(columns={"ID": "ID Number"}, inplace=True)
 
 df.to_csv(OUTPUT_FILE, index=False)
+
 logging.info(f"CSV created: {OUTPUT_FILE}")
 
 def get_access_token():
@@ -160,8 +179,6 @@ def upload_to_sharepoint(file_path):
 
     site = requests.get(site_url, headers=headers).json()
 
-    print("SITE:", site)
-
     if "id" not in site:
         raise Exception(f"Site error: {site}")
 
@@ -172,8 +189,6 @@ def upload_to_sharepoint(file_path):
         headers=headers
     ).json()
 
-    print("DRIVE:", drive)
-
     drive_id = drive["id"]
 
     file_name = os.path.basename(file_path)
@@ -182,8 +197,6 @@ def upload_to_sharepoint(file_path):
 
     with open(file_path, "rb") as f:
         res = requests.put(upload_url, headers=headers, data=f)
-
-    print("UPLOAD:", res.text)
 
     if res.status_code not in [200, 201]:
         raise Exception(f"Upload failed: {res.text}")
