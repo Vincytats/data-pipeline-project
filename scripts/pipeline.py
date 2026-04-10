@@ -1,5 +1,6 @@
 import io
 import os
+import json
 import pandas as pd
 from datetime import datetime
 from calendar import monthrange
@@ -20,18 +21,21 @@ ACCESS_TOKEN = os.getenv("ONEDRIVE_ACCESS_TOKEN")
 
 
 # ==============================
-# GOOGLE AUTH
+# GOOGLE DRIVE AUTH (FIXED)
 # ==============================
 def authenticate_drive():
+    creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+
     creds = service_account.Credentials.from_service_account_info(
-        eval(os.getenv("GOOGLE_CREDENTIALS")),
+        creds_dict,
         scopes=["https://www.googleapis.com/auth/drive"]
     )
+
     return build("drive", "v3", credentials=creds)
 
 
 # ==============================
-# GET FILES
+# GET FILES FROM FOLDER
 # ==============================
 def get_files(service):
     results = service.files().list(
@@ -59,7 +63,7 @@ def download_file(service, file_id):
 
 
 # ==============================
-# PROCESS FILE
+# PROCESS EACH FILE
 # ==============================
 def process_file(file_stream, filename):
 
@@ -73,6 +77,7 @@ def process_file(file_stream, filename):
         "Date Paid"
     ]
 
+    # Ensure all columns exist
     for col in required_cols:
         if col not in df.columns:
             df[col] = None
@@ -82,15 +87,19 @@ def process_file(file_stream, filename):
     # Preserve leading zeros
     df["ID Number"] = df["ID Number"].astype(str)
 
-    # Handle Date Paid
+    # Handle missing Date Paid
     if df["Date Paid"].isnull().all():
         try:
-            date_obj = datetime.strptime(filename[:15], "%B %Y")
+            # Extract "March 2026" from filename
+            name_part = filename.replace(".xlsx", "")
+            date_obj = datetime.strptime(name_part[:15], "%B %Y")
+
             last_day = monthrange(date_obj.year, date_obj.month)[1]
             df["Date Paid"] = datetime(date_obj.year, date_obj.month, last_day)
         except:
             df["Date Paid"] = None
 
+    # Add Reference column
     df["Reference"] = filename.replace(".xlsx", "")
 
     return df
@@ -110,38 +119,54 @@ def upload_to_onedrive(file_path):
         response = requests.put(ONEDRIVE_UPLOAD_URL, headers=headers, data=f)
 
     if response.status_code in [200, 201]:
-        print("Upload successful")
+        print("✅ Upload successful")
     else:
-        print("Upload failed:", response.text)
+        print("❌ Upload failed:", response.text)
 
 
 # ==============================
-# MAIN
+# MAIN PIPELINE
 # ==============================
 def run_pipeline():
 
     service = authenticate_drive()
     files = get_files(service)
 
+    if not files:
+        print("⚠️ No files found in Google Drive folder")
+        return
+
     all_data = []
 
     for file in files:
-        print(f"Processing: {file['name']}")
+        print(f"📄 Processing: {file['name']}")
 
-        file_stream = download_file(service, file["id"])
-        df = process_file(file_stream, file["name"])
+        try:
+            file_stream = download_file(service, file["id"])
+            df = process_file(file_stream, file["name"])
+            all_data.append(df)
 
-        all_data.append(df)
+        except Exception as e:
+            print(f"❌ Error processing {file['name']}: {e}")
+
+    if not all_data:
+        print("⚠️ No data processed")
+        return
 
     final_df = pd.concat(all_data, ignore_index=True)
 
     output_file = "consolidated_output.xlsx"
     final_df.to_excel(output_file, index=False)
 
+    print("✅ Consolidation complete")
+
     upload_to_onedrive(output_file)
 
-    print("Pipeline complete")
+    print("🚀 Pipeline finished successfully")
 
 
+# ==============================
+# ENTRY POINT
+# ==============================
 if __name__ == "__main__":
     run_pipeline()
