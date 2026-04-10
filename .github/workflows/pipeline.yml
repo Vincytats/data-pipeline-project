@@ -1,42 +1,30 @@
 name: Data Pipeline
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # manual run
   schedule:
-    - cron: "0 6 * * *"
-
-permissions:
-  contents: write
+    - cron: "0 6 * * *"   # runs daily at 6 AM
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Checkout repo
-      uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-    - name: Install dependencies
-      run: |
-        pip install pandas requests
-        pip install google-api-python-client google-auth
-
-    - name: Create Google credentials file
-      run: |
-        echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT }}" > service_account.json
-        echo "File created:"
-        ls -l
-
-    - name: Run pipeline
-      env:
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        GOOGLE_APPLICATION_CREDENTIALS: service_account.json
-      run: python scripts/pipeline.py
+      - name: Run pipeline
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          FOLDER_ID: ${{ secrets.FOLDER_ID }}
+          ONEDRIVE_ACCESS_TOKEN: ${{ secrets.ONEDRIVE_ACCESS_TOKEN }}
+          ONEDRIVE_UPLOAD_URL: ${{ secrets.ONEDRIVE_UPLOAD_URL }}
+        run: python pipeline.py
