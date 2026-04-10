@@ -1,122 +1,147 @@
-import pandas as pd
-import requests
-from io import StringIO
-import logging
-import calendar
-import re
+import io
 import os
+import pandas as pd
+from datetime import datetime
+from calendar import monthrange
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
-logging.basicConfig(level=logging.INFO)
+import requests
 
-print("PIPELINE VERSION FINAL RUNNING")
 
-FOLDER_NAME = "Participant Wages Paid Datasource"
-OUTPUT_FILE = "Consolidated Participant Data.csv"
+# ==============================
+# ENV VARIABLES (FROM GITHUB SECRETS)
+# ==============================
+FOLDER_ID = os.getenv("FOLDER_ID")
+ONEDRIVE_UPLOAD_URL = os.getenv("ONEDRIVE_UPLOAD_URL")
+ACCESS_TOKEN = os.getenv("ONEDRIVE_ACCESS_TOKEN")
 
-SCOPES = ['https://www.googleapis.com/auth/drive']
 
-creds = service_account.Credentials.from_service_account_file(
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
-    scopes=SCOPES
-)
+# ==============================
+# GOOGLE AUTH
+# ==============================
+def authenticate_drive():
+    creds = service_account.Credentials.from_service_account_info(
+        eval(os.getenv("GOOGLE_CREDENTIALS")),
+        scopes=["https://www.googleapis.com/auth/drive"]
+    )
+    return build("drive", "v3", credentials=creds)
 
-drive_service = build('drive', 'v3', credentials=creds)
 
-def get_folder_id(folder_name):
-    query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder'"
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-    folders = results.get('files', [])
-    if not folders:
-        raise Exception("Folder not found")
-    return folders[0]['id']
+# ==============================
+# GET FILES
+# ==============================
+def get_files(service):
+    results = service.files().list(
+        q=f"'{FOLDER_ID}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'",
+        fields="files(id, name)"
+    ).execute()
 
-def get_files_in_folder(folder_id):
-    query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.spreadsheet'"
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-    return results.get('files', [])
+    return results.get("files", [])
 
-def load_sheet(file_id):
-    url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv"
-    r = requests.get(url)
-    if r.status_code != 200:
-        raise Exception("Failed to download sheet")
-    return pd.read_csv(StringIO(r.text), dtype=str)
 
-def clean_columns(df):
+# ==============================
+# DOWNLOAD FILE
+# ==============================
+def download_file(service, file_id):
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+
+    fh.seek(0)
+    return fh
+
+
+# ==============================
+# PROCESS FILE
+# ==============================
+def process_file(file_stream, filename):
+
+    df = pd.read_excel(file_stream, dtype=str)
     df.columns = df.columns.str.strip()
-    df.columns = df.columns.str.replace(r"\s+", " ", regex=True)
+
+    required_cols = [
+        "ID Number", "Wage category", "Nett Wages Paid",
+        "Days worked", "Nett Wages Due", "UIF (Participant)",
+        "SDL", "Age", "Gender", "Education", "Youth / Adult",
+        "Date Paid"
+    ]
+
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = None
+
+    df = df[required_cols]
+
+    # Preserve leading zeros
+    df["ID Number"] = df["ID Number"].astype(str)
+
+    # Handle Date Paid
+    if df["Date Paid"].isnull().all():
+        try:
+            date_obj = datetime.strptime(filename[:15], "%B %Y")
+            last_day = monthrange(date_obj.year, date_obj.month)[1]
+            df["Date Paid"] = datetime(date_obj.year, date_obj.month, last_day)
+        except:
+            df["Date Paid"] = None
+
+    df["Reference"] = filename.replace(".xlsx", "")
+
     return df
 
-def clean_id(series):
-    return (
-        series.astype(str)
-        .str.replace(r"\.0$", "", regex=True)
-        .str.replace(r"[^\d]", "", regex=True)
-        .str.zfill(13)
-    )
 
-def extract_month_info(name):
-    match = re.search(r"([A-Za-z]+)\s(\d{4})", name)
-    if not match:
-        return None, None
-    month_str, year = match.groups()
+# ==============================
+# UPLOAD TO ONEDRIVE
+# ==============================
+def upload_to_onedrive(file_path):
 
-    month_str = month_str.capitalize()
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    }
 
-    if month_str in calendar.month_name:
-        month_number = list(calendar.month_name).index(month_str)
+    with open(file_path, "rb") as f:
+        response = requests.put(ONEDRIVE_UPLOAD_URL, headers=headers, data=f)
+
+    if response.status_code in [200, 201]:
+        print("Upload successful")
     else:
-        month_number = list(calendar.month_abbr).index(month_str)
+        print("Upload failed:", response.text)
 
-    last_day = calendar.monthrange(int(year), month_number)[1]
 
-    return f"{month_str} {year} Report", f"{last_day:02d}/{month_number:02d}/{year}"
+# ==============================
+# MAIN
+# ==============================
+def run_pipeline():
 
-# 🔥 Get folder + files
-folder_id = get_folder_id(FOLDER_NAME)
-files = get_files_in_folder(folder_id)
+    service = authenticate_drive()
+    files = get_files(service)
 
-logging.info(f"FILES FOUND: {[f['name'] for f in files]}")
+    all_data = []
 
-all_data = []
+    for file in files:
+        print(f"Processing: {file['name']}")
 
-for file in files:
-    file_id = file["id"]
-    file_name = file["name"]
+        file_stream = download_file(service, file["id"])
+        df = process_file(file_stream, file["name"])
 
-    df = load_sheet(file_id)
-    df = clean_columns(df)
+        all_data.append(df)
 
-    for col in df.columns:
-        if "id" in col.lower():
-            df.rename(columns={col: "ID"}, inplace=True)
-            break
+    final_df = pd.concat(all_data, ignore_index=True)
 
-    if "ID" in df.columns:
-        df["ID"] = clean_id(df["ID"])
+    output_file = "consolidated_output.xlsx"
+    final_df.to_excel(output_file, index=False)
 
-    month_recorded, payment_date = extract_month_info(file_name)
+    upload_to_onedrive(output_file)
 
-    df["Month_recorded"] = month_recorded
-    df["Payment_Date"] = payment_date
+    print("Pipeline complete")
 
-    all_data.append(df)
 
-df = pd.concat(all_data, ignore_index=True)
-
-logging.info(f"TOTAL ROWS: {len(df)}")
-
-# remove only missing ID
-df = df[df["ID"].notna() & (df["ID"] != "")]
-
-df.rename(columns={"ID": "ID Number"}, inplace=True)
-
-# Excel-safe format
-df["ID Number"] = '="' + df["ID Number"] + '"'
-
-df.to_csv(OUTPUT_FILE, index=False)
-
-logging.info(f"CSV created: {OUTPUT_FILE}")
+if __name__ == "__main__":
+    run_pipeline()
