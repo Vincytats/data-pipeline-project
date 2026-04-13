@@ -4,6 +4,7 @@ import json
 import pandas as pd
 from datetime import datetime
 from calendar import monthrange
+import re
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -100,37 +101,40 @@ def process_file(file_stream, filename):
 
     df["ID Number"] = df["ID Number"].astype(str)
 
-   import re
+    # ==============================
+    # ✅ FORCE DATE PAID (ROBUST FIX)
+    # ==============================
+    try:
+        name_part = filename.replace(".xlsx", "")
 
-# ==============================
-# FORCE DATE PAID = LAST DAY OF MONTH (ROBUST)
-# ==============================
-try:
-    name_part = filename.replace(".xlsx", "")
+        match = re.search(
+            r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}",
+            name_part
+        )
 
-    # Extract "Month Year" dynamically (e.g. February 2026)
-    match = re.search(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}", name_part)
+        if match:
+            date_obj = datetime.strptime(match.group(), "%B %Y")
 
-    if match:
-        date_obj = datetime.strptime(match.group(), "%B %Y")
+            last_day = monthrange(date_obj.year, date_obj.month)[1]
 
-        last_day = monthrange(date_obj.year, date_obj.month)[1]
+            formatted_date = datetime(
+                date_obj.year,
+                date_obj.month,
+                last_day
+            ).strftime("%d/%m/%y")
 
-        formatted_date = datetime(
-            date_obj.year,
-            date_obj.month,
-            last_day
-        ).strftime("%d/%m/%y")
+            df["Date Paid"] = formatted_date
+        else:
+            raise ValueError("Month-Year pattern not found in filename")
 
-        df["Date Paid"] = formatted_date
-    else:
-        raise ValueError("Month-Year pattern not found in filename")
+    except Exception as e:
+        print(f"⚠️ Could not derive Date Paid from filename {filename}: {e}")
+        df["Date Paid"] = None
 
-except Exception as e:
-    print(f"⚠️ Could not derive Date Paid from filename {filename}: {e}")
-    df["Date Paid"] = None
+    # Reference
+    df["Reference"] = filename.replace(".xlsx", "")
 
-    # ✅ VERSION COLUMN
+    # Version column
     df["Version"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     return df
@@ -157,7 +161,7 @@ def get_access_token():
 
 
 # ==============================
-# UPLOAD TO SHAREPOINT (FINAL FIX)
+# UPLOAD TO SHAREPOINT
 # ==============================
 def upload_to_sharepoint(file_path):
 
@@ -168,15 +172,13 @@ def upload_to_sharepoint(file_path):
         "Authorization": f"Bearer {access_token}"
     }
 
-    # ✅ STEP 1: Get Site ID
+    # Get Site ID
     site_url = f"https://graph.microsoft.com/v1.0/sites/{SHAREPOINT_SITE}:{SITE_PATH}"
     site_res = requests.get(site_url, headers=headers)
     site_res.raise_for_status()
     site_id = site_res.json()["id"]
 
-    print("SITE ID:", site_id)
-
-    # ✅ STEP 2: Get Drive ID
+    # Get Drive ID
     drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
     drive_res = requests.get(drive_url, headers=headers)
     drive_res.raise_for_status()
@@ -192,17 +194,13 @@ def upload_to_sharepoint(file_path):
     if not drive_id:
         raise Exception("❌ Could not find Documents library")
 
-    print("DRIVE ID:", drive_id)
-
-    # ✅ STEP 3: Upload file
+    # Upload
     upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{filename}:/content"
 
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }
-
-    print("UPLOAD URL:", upload_url)
 
     with open(file_path, "rb") as f:
         response = requests.put(upload_url, headers=headers, data=f)
@@ -220,15 +218,8 @@ def run_pipeline():
 
     print("🚀 Starting pipeline...")
 
-    if not FOLDER_ID:
-        raise ValueError("❌ FOLDER_ID missing")
-
     service = authenticate_drive()
     files = get_files(service)
-
-    if not files:
-        print("⚠️ No files found")
-        return
 
     print(f"📂 Found {len(files)} files")
 
