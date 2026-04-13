@@ -13,7 +13,7 @@ import requests
 
 
 # ==============================
-# ENV VARIABLES (FROM GITHUB SECRETS)
+# ENV VARIABLES
 # ==============================
 FOLDER_ID = os.getenv("FOLDER_ID")
 ONEDRIVE_UPLOAD_URL = os.getenv("ONEDRIVE_UPLOAD_URL")
@@ -21,7 +21,7 @@ ACCESS_TOKEN = os.getenv("ONEDRIVE_ACCESS_TOKEN")
 
 
 # ==============================
-# GOOGLE DRIVE AUTH (FIXED)
+# GOOGLE DRIVE AUTH
 # ==============================
 def authenticate_drive():
     creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
@@ -35,23 +35,33 @@ def authenticate_drive():
 
 
 # ==============================
-# GET FILES FROM FOLDER
+# GET FILES (NOW SUPPORTS GOOGLE SHEETS)
 # ==============================
 def get_files(service):
     results = service.files().list(
-        q=f"'{FOLDER_ID}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'",
-        fields="files(id, name)"
+        q=f"'{FOLDER_ID}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.google-apps.spreadsheet')",
+        fields="files(id, name, mimeType)",
+        pageSize=1000
     ).execute()
 
     return results.get("files", [])
 
 
 # ==============================
-# DOWNLOAD FILE
+# DOWNLOAD FILE (FIXED)
 # ==============================
-def download_file(service, file_id):
-    request = service.files().get_media(fileId=file_id)
+def download_file(service, file_id, mime_type):
+
     fh = io.BytesIO()
+
+    if mime_type == "application/vnd.google-apps.spreadsheet":
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        request = service.files().get_media(fileId=file_id)
+
     downloader = MediaIoBaseDownload(fh, request)
 
     done = False
@@ -63,11 +73,12 @@ def download_file(service, file_id):
 
 
 # ==============================
-# PROCESS EACH FILE
+# PROCESS FILE
 # ==============================
 def process_file(file_stream, filename):
 
-    df = pd.read_excel(file_stream, dtype=str)
+    # Always read first sheet
+    df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
     df.columns = df.columns.str.strip()
 
     required_cols = [
@@ -77,7 +88,7 @@ def process_file(file_stream, filename):
         "Date Paid"
     ]
 
-    # Ensure all columns exist
+    # Ensure all required columns exist
     for col in required_cols:
         if col not in df.columns:
             df[col] = None
@@ -87,10 +98,9 @@ def process_file(file_stream, filename):
     # Preserve leading zeros
     df["ID Number"] = df["ID Number"].astype(str)
 
-    # Handle missing Date Paid
+    # Handle Date Paid
     if df["Date Paid"].isnull().all():
         try:
-            # Extract "March 2026" from filename
             name_part = filename.replace(".xlsx", "")
             date_obj = datetime.strptime(name_part[:15], "%B %Y")
 
@@ -129,6 +139,8 @@ def upload_to_onedrive(file_path):
 # ==============================
 def run_pipeline():
 
+    print("🚀 Starting pipeline...")
+
     service = authenticate_drive()
     files = get_files(service)
 
@@ -136,13 +148,15 @@ def run_pipeline():
         print("⚠️ No files found in Google Drive folder")
         return
 
+    print(f"📂 Found {len(files)} files")
+
     all_data = []
 
     for file in files:
         print(f"📄 Processing: {file['name']}")
 
         try:
-            file_stream = download_file(service, file["id"])
+            file_stream = download_file(service, file["id"], file["mimeType"])
             df = process_file(file_stream, file["name"])
             all_data.append(df)
 
@@ -162,7 +176,7 @@ def run_pipeline():
 
     upload_to_onedrive(output_file)
 
-    print("🚀 Pipeline finished successfully")
+    print("🎉 Pipeline finished successfully")
 
 
 # ==============================
