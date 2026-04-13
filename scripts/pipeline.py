@@ -23,12 +23,10 @@ CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 
 SHAREPOINT_SITE = "thelearningtrust.sharepoint.com"
 SITE_PATH = "/sites/TheLearningTrust"
-TARGET_FOLDER = "Shared Documents"
-
 
 
 # ==============================
-# AUTH: GOOGLE DRIVE
+# GOOGLE DRIVE AUTH
 # ==============================
 def authenticate_drive():
     creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
@@ -122,7 +120,7 @@ def process_file(file_stream, filename):
 
 
 # ==============================
-# GET MICROSOFT ACCESS TOKEN (AUTO)
+# GET MICROSOFT ACCESS TOKEN
 # ==============================
 def get_access_token():
 
@@ -142,20 +140,52 @@ def get_access_token():
 
 
 # ==============================
-# UPLOAD TO SHAREPOINT
+# UPLOAD TO SHAREPOINT (FINAL FIX)
 # ==============================
 def upload_to_sharepoint(file_path):
 
     access_token = get_access_token()
-
     filename = os.path.basename(file_path)
 
-    upload_url = f"https://graph.microsoft.com/v1.0/sites/{SHAREPOINT_SITE}:{SITE_PATH}:/drive/root:/{TARGET_FOLDER}/{filename}:/content"
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+
+    # ✅ STEP 1: Get Site ID
+    site_url = f"https://graph.microsoft.com/v1.0/sites/{SHAREPOINT_SITE}:{SITE_PATH}"
+    site_res = requests.get(site_url, headers=headers)
+    site_res.raise_for_status()
+    site_id = site_res.json()["id"]
+
+    print("SITE ID:", site_id)
+
+    # ✅ STEP 2: Get Drive ID
+    drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+    drive_res = requests.get(drive_url, headers=headers)
+    drive_res.raise_for_status()
+
+    drives = drive_res.json()["value"]
+
+    drive_id = None
+    for d in drives:
+        if d["name"] in ["Documents", "Shared Documents"]:
+            drive_id = d["id"]
+            break
+
+    if not drive_id:
+        raise Exception("❌ Could not find Documents library")
+
+    print("DRIVE ID:", drive_id)
+
+    # ✅ STEP 3: Upload file
+    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/Consolidated data/{filename}:/content"
 
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }
+
+    print("UPLOAD URL:", upload_url)
 
     with open(file_path, "rb") as f:
         response = requests.put(upload_url, headers=headers, data=f)
@@ -174,7 +204,7 @@ def run_pipeline():
     print("🚀 Starting pipeline...")
 
     if not FOLDER_ID:
-        raise ValueError("❌ FOLDER_ID is missing")
+        raise ValueError("❌ FOLDER_ID missing")
 
     service = authenticate_drive()
     files = get_files(service)
