@@ -23,7 +23,7 @@ CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 
 SHAREPOINT_SITE = "thelearningtrust.sharepoint.com"
 SITE_PATH = "/sites/TheLearningTrust"
-TARGET_FOLDER = "Shared Documents/Consolidated data"
+TARGET_FOLDER = "Shared Documents"
 
 
 
