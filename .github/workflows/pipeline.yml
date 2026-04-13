@@ -3,7 +3,7 @@ name: Data Pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * *"   # Runs daily at 6 AM UTC
 
 jobs:
   run-pipeline:
@@ -23,8 +23,13 @@ jobs:
 
       - name: Run pipeline
         env:
+          # 🔹 GOOGLE
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           FOLDER_ID: ${{ secrets.FOLDER_ID }}
-          ONEDRIVE_ACCESS_TOKEN: ${{ secrets.ONEDRIVE_ACCESS_TOKEN }}
-          ONEDRIVE_UPLOAD_URL: ${{ secrets.ONEDRIVE_UPLOAD_URL }}
+
+          # 🔹 AZURE (CRITICAL FIX)
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+
         run: python scripts/pipeline.py
