@@ -237,7 +237,7 @@ def run_pipeline():
 
     final_df = pd.concat(all_data, ignore_index=True)
 
-    output_file = "consolidated_output.xlsx"
+    output_file = "Consolidated Output.xlsx"
     final_df.to_excel(output_file, index=False)
 
     print("✅ Consolidation complete")
