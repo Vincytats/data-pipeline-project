@@ -100,18 +100,23 @@ def process_file(file_stream, filename):
 
     df["ID Number"] = df["ID Number"].astype(str)
 
-    # Handle Date Paid
-    if df["Date Paid"].isnull().all():
-        try:
-            name_part = filename.replace(".xlsx", "")
-            date_obj = datetime.strptime(name_part[:15], "%B %Y")
+   # ==============================
+# FORCE DATE PAID = LAST DAY OF MONTH
+# ==============================
+try:
+    name_part = filename.replace(".xlsx", "")
+    date_obj = datetime.strptime(name_part[:15], "%B %Y")
 
-            last_day = monthrange(date_obj.year, date_obj.month)[1]
-            df["Date Paid"] = datetime(date_obj.year, date_obj.month, last_day)
-        except:
-            df["Date Paid"] = None
+    last_day = monthrange(date_obj.year, date_obj.month)[1]
 
-    df["Reference"] = filename.replace(".xlsx", "")
+    # Format: DD/MM/YY (e.g. 28/02/26)
+    formatted_date = datetime(date_obj.year, date_obj.month, last_day).strftime("%d/%m/%y")
+
+    df["Date Paid"] = formatted_date
+
+except Exception as e:
+    print(f"⚠️ Could not derive Date Paid from filename {filename}: {e}")
+    df["Date Paid"] = None
 
     # ✅ VERSION COLUMN
     df["Version"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
