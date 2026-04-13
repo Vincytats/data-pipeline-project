@@ -100,19 +100,31 @@ def process_file(file_stream, filename):
 
     df["ID Number"] = df["ID Number"].astype(str)
 
-   # ==============================
-# FORCE DATE PAID = LAST DAY OF MONTH
+   import re
+
+# ==============================
+# FORCE DATE PAID = LAST DAY OF MONTH (ROBUST)
 # ==============================
 try:
     name_part = filename.replace(".xlsx", "")
-    date_obj = datetime.strptime(name_part[:15], "%B %Y")
 
-    last_day = monthrange(date_obj.year, date_obj.month)[1]
+    # Extract "Month Year" dynamically (e.g. February 2026)
+    match = re.search(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}", name_part)
 
-    # Format: DD/MM/YY (e.g. 28/02/26)
-    formatted_date = datetime(date_obj.year, date_obj.month, last_day).strftime("%d/%m/%y")
+    if match:
+        date_obj = datetime.strptime(match.group(), "%B %Y")
 
-    df["Date Paid"] = formatted_date
+        last_day = monthrange(date_obj.year, date_obj.month)[1]
+
+        formatted_date = datetime(
+            date_obj.year,
+            date_obj.month,
+            last_day
+        ).strftime("%d/%m/%y")
+
+        df["Date Paid"] = formatted_date
+    else:
+        raise ValueError("Month-Year pattern not found in filename")
 
 except Exception as e:
     print(f"⚠️ Could not derive Date Paid from filename {filename}: {e}")
