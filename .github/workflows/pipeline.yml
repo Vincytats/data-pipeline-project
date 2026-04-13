@@ -3,7 +3,7 @@ name: Data Pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 6 * * *"   # Runs daily at 6 AM
+    - cron: "0 6 * * *"
 
 jobs:
   run-pipeline:
@@ -12,9 +12,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-
-      - name: Debug repo structure
-        run: ls -R
 
       - name: Set up Python
         uses: actions/setup-python@v4
