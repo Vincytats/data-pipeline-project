@@ -16,12 +16,19 @@ import requests
 # ENV VARIABLES
 # ==============================
 FOLDER_ID = os.getenv("FOLDER_ID")
-ONEDRIVE_UPLOAD_URL = os.getenv("ONEDRIVE_UPLOAD_URL")
-ACCESS_TOKEN = os.getenv("ONEDRIVE_ACCESS_TOKEN")
+
+TENANT_ID = os.getenv("AZURE_TENANT_ID")
+CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
+CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
+
+SHAREPOINT_SITE = "thelearningtrust.sharepoint.com"
+SITE_PATH = "/sites/TheLearningTrust"
+TARGET_FOLDER = "Documents/Consolidated data"
+
 
 
 # ==============================
-# GOOGLE DRIVE AUTH
+# AUTH: GOOGLE DRIVE
 # ==============================
 def authenticate_drive():
     creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
@@ -35,7 +42,7 @@ def authenticate_drive():
 
 
 # ==============================
-# GET FILES (NOW SUPPORTS GOOGLE SHEETS)
+# GET FILES
 # ==============================
 def get_files(service):
     results = service.files().list(
@@ -48,7 +55,7 @@ def get_files(service):
 
 
 # ==============================
-# DOWNLOAD FILE (FIXED)
+# DOWNLOAD FILE
 # ==============================
 def download_file(service, file_id, mime_type):
 
@@ -77,7 +84,6 @@ def download_file(service, file_id, mime_type):
 # ==============================
 def process_file(file_stream, filename):
 
-    # Always read first sheet
     df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
     df.columns = df.columns.str.strip()
 
@@ -88,14 +94,12 @@ def process_file(file_stream, filename):
         "Date Paid"
     ]
 
-    # Ensure all required columns exist
     for col in required_cols:
         if col not in df.columns:
             df[col] = None
 
     df = df[required_cols]
 
-    # Preserve leading zeros
     df["ID Number"] = df["ID Number"].astype(str)
 
     # Handle Date Paid
@@ -109,24 +113,52 @@ def process_file(file_stream, filename):
         except:
             df["Date Paid"] = None
 
-    # Add Reference column
     df["Reference"] = filename.replace(".xlsx", "")
+
+    # ✅ VERSION COLUMN
+    df["Version"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     return df
 
 
 # ==============================
-# UPLOAD TO ONEDRIVE
+# GET MICROSOFT ACCESS TOKEN (AUTO)
 # ==============================
-def upload_to_onedrive(file_path):
+def get_access_token():
+
+    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+
+    data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "scope": "https://graph.microsoft.com/.default",
+        "grant_type": "client_credentials"
+    }
+
+    response = requests.post(url, data=data)
+    response.raise_for_status()
+
+    return response.json()["access_token"]
+
+
+# ==============================
+# UPLOAD TO SHAREPOINT
+# ==============================
+def upload_to_sharepoint(file_path):
+
+    access_token = get_access_token()
+
+    filename = os.path.basename(file_path)
+
+    upload_url = f"https://graph.microsoft.com/v1.0/sites/{SHAREPOINT_SITE}:{SITE_PATH}:/drive/root:/{TARGET_FOLDER}/{filename}:/content"
 
     headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }
 
     with open(file_path, "rb") as f:
-        response = requests.put(ONEDRIVE_UPLOAD_URL, headers=headers, data=f)
+        response = requests.put(upload_url, headers=headers, data=f)
 
     if response.status_code in [200, 201]:
         print("✅ Upload successful")
@@ -141,11 +173,14 @@ def run_pipeline():
 
     print("🚀 Starting pipeline...")
 
+    if not FOLDER_ID:
+        raise ValueError("❌ FOLDER_ID is missing")
+
     service = authenticate_drive()
     files = get_files(service)
 
     if not files:
-        print("⚠️ No files found in Google Drive folder")
+        print("⚠️ No files found")
         return
 
     print(f"📂 Found {len(files)} files")
@@ -159,13 +194,8 @@ def run_pipeline():
             file_stream = download_file(service, file["id"], file["mimeType"])
             df = process_file(file_stream, file["name"])
             all_data.append(df)
-
         except Exception as e:
             print(f"❌ Error processing {file['name']}: {e}")
-
-    if not all_data:
-        print("⚠️ No data processed")
-        return
 
     final_df = pd.concat(all_data, ignore_index=True)
 
@@ -174,7 +204,7 @@ def run_pipeline():
 
     print("✅ Consolidation complete")
 
-    upload_to_onedrive(output_file)
+    upload_to_sharepoint(output_file)
 
     print("🎉 Pipeline finished successfully")
 
