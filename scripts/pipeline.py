@@ -312,7 +312,7 @@ print("✅ Consolidation complete")
 
 upload_to_sharepoint(output_file)
 
-    print("🎉 Pipeline finished successfully")
+print("🎉 Pipeline finished successfully")
 
 
 # ==============================
