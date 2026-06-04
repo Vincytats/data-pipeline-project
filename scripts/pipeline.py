@@ -226,6 +226,9 @@ def upload_to_sharepoint(file_path):
 # ==============================
 # MAIN PIPELINE
 # ==============================
+# ==============================
+# MAIN PIPELINE
+# ==============================
 def run_pipeline():
 
     print("🚀 Starting pipeline...")
@@ -244,75 +247,79 @@ def run_pipeline():
             file_stream = download_file(service, file["id"], file["mimeType"])
             df = process_file(file_stream, file["name"])
             all_data.append(df)
+
         except Exception as e:
             print(f"❌ Error processing {file['name']}: {e}")
 
-final_df = pd.concat(all_data, ignore_index=True)
+    if not all_data:
+        raise Exception("No files were successfully processed")
 
-output_file = "Consolidated Output.xlsx"
+    final_df = pd.concat(all_data, ignore_index=True)
 
-with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+    output_file = "Consolidated Output.xlsx"
 
-    final_df.to_excel(
-        writer,
-        sheet_name="Consolidated Data",
-        index=False
-    )
+    with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
 
-    ws = writer.sheets["Consolidated Data"]
+        final_df.to_excel(
+            writer,
+            sheet_name="Consolidated Data",
+            index=False
+        )
 
-    # Map headers to Excel column numbers
-    header_map = {
-        cell.value: cell.column
-        for cell in ws[1]
-    }
+        ws = writer.sheets["Consolidated Data"]
 
-    integer_cols = [
-        "Wage category",
-        "Days worked",
-        "Age"
-    ]
+        # Map headers to Excel column numbers
+        header_map = {
+            cell.value: cell.column
+            for cell in ws[1]
+        }
 
-    decimal_cols = [
-        "Nett Wages Paid",
-        "Nett Wages Due",
-        "UIF (Participant)",
-        "SDL"
-    ]
+        integer_cols = [
+            "Wage category",
+            "Days worked",
+            "Age"
+        ]
 
-    # Format integer columns
-    for col_name in integer_cols:
+        decimal_cols = [
+            "Nett Wages Paid",
+            "Nett Wages Due",
+            "UIF (Participant)",
+            "SDL"
+        ]
 
-        if col_name in header_map:
+        # Format integer columns
+        for col_name in integer_cols:
 
-            col_num = header_map[col_name]
+            if col_name in header_map:
 
-            for row in range(2, ws.max_row + 1):
+                col_num = header_map[col_name]
 
-                cell = ws.cell(row=row, column=col_num)
+                for row in range(2, ws.max_row + 1):
 
-                if cell.value is not None:
-                    cell.number_format = "0"
+                    cell = ws.cell(row=row, column=col_num)
 
-    # Format decimal columns
-    for col_name in decimal_cols:
+                    if cell.value is not None:
+                        cell.number_format = "0"
 
-        if col_name in header_map:
+        # Format decimal columns
+        for col_name in decimal_cols:
 
-            col_num = header_map[col_name]
+            if col_name in header_map:
 
-            for row in range(2, ws.max_row + 1):
+                col_num = header_map[col_name]
 
-                cell = ws.cell(row=row, column=col_num)
+                for row in range(2, ws.max_row + 1):
 
-                if cell.value is not None:
-                    cell.number_format = "0.00"
+                    cell = ws.cell(row=row, column=col_num)
 
-print("✅ Consolidation complete")
+                    if cell.value is not None:
+                        cell.number_format = "0.00"
 
-upload_to_sharepoint(output_file)
+    print("✅ Consolidation complete")
 
-print("🎉 Pipeline finished successfully")
+    upload_to_sharepoint(output_file)
+
+    print("🎉 Pipeline finished successfully")
 
 
 # ==============================
