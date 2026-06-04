@@ -247,8 +247,6 @@ def run_pipeline():
         except Exception as e:
             print(f"❌ Error processing {file['name']}: {e}")
 
-   from openpyxl.styles import numbers
-
 final_df = pd.concat(all_data, ignore_index=True)
 
 output_file = "Consolidated Output.xlsx"
