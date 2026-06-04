@@ -100,24 +100,25 @@ def process_file(file_stream, filename):
 
     df = df[required_cols]
 
-   df["ID Number"] = df["ID Number"].astype(str)
+    # Keep ID as text
+    df["ID Number"] = df["ID Number"].astype(str)
 
-# Force numeric columns
-numeric_cols = [
-    "Wage category",
-    "Nett Wages Paid",
-    "Days worked",
-    "Nett Wages Due",
-    "UIF (Participant)",
-    "SDL",
-    "Age"
-]
+    # Force numeric columns
+    numeric_cols = [
+        "Wage category",
+        "Nett Wages Paid",
+        "Days worked",
+        "Nett Wages Due",
+        "UIF (Participant)",
+        "SDL",
+        "Age"
+    ]
 
-for col in numeric_cols:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # ==============================
-    # ✅ FORCE DATE PAID (ROBUST FIX)
+    # FORCE DATE PAID
     # ==============================
     try:
         name_part = filename.replace(".xlsx", "")
@@ -146,14 +147,10 @@ for col in numeric_cols:
         print(f"⚠️ Could not derive Date Paid from filename {filename}: {e}")
         df["Date Paid"] = None
 
-    # Reference
     df["Reference"] = filename.replace(".xlsx", "")
-
-    # Version column
     df["Version"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     return df
-
 
 # ==============================
 # GET MICROSOFT ACCESS TOKEN
