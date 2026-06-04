@@ -9,6 +9,7 @@ import re
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from openpyxl.styles import numbers
 
 import requests
 
@@ -99,7 +100,21 @@ def process_file(file_stream, filename):
 
     df = df[required_cols]
 
-    df["ID Number"] = df["ID Number"].astype(str)
+   df["ID Number"] = df["ID Number"].astype(str)
+
+# Force numeric columns
+numeric_cols = [
+    "Wage category",
+    "Nett Wages Paid",
+    "Days worked",
+    "Nett Wages Due",
+    "UIF (Participant)",
+    "SDL",
+    "Age"
+]
+
+for col in numeric_cols:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # ==============================
     # ✅ FORCE DATE PAID (ROBUST FIX)
@@ -235,14 +250,72 @@ def run_pipeline():
         except Exception as e:
             print(f"❌ Error processing {file['name']}: {e}")
 
-    final_df = pd.concat(all_data, ignore_index=True)
+   from openpyxl.styles import numbers
 
-    output_file = "Consolidated Output.xlsx"
-    final_df.to_excel(output_file, index=False)
+final_df = pd.concat(all_data, ignore_index=True)
 
-    print("✅ Consolidation complete")
+output_file = "Consolidated Output.xlsx"
 
-    upload_to_sharepoint(output_file)
+with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+
+    final_df.to_excel(
+        writer,
+        sheet_name="Consolidated Data",
+        index=False
+    )
+
+    ws = writer.sheets["Consolidated Data"]
+
+    # Map headers to Excel column numbers
+    header_map = {
+        cell.value: cell.column
+        for cell in ws[1]
+    }
+
+    integer_cols = [
+        "Wage category",
+        "Days worked",
+        "Age"
+    ]
+
+    decimal_cols = [
+        "Nett Wages Paid",
+        "Nett Wages Due",
+        "UIF (Participant)",
+        "SDL"
+    ]
+
+    # Format integer columns
+    for col_name in integer_cols:
+
+        if col_name in header_map:
+
+            col_num = header_map[col_name]
+
+            for row in range(2, ws.max_row + 1):
+
+                cell = ws.cell(row=row, column=col_num)
+
+                if cell.value is not None:
+                    cell.number_format = "0"
+
+    # Format decimal columns
+    for col_name in decimal_cols:
+
+        if col_name in header_map:
+
+            col_num = header_map[col_name]
+
+            for row in range(2, ws.max_row + 1):
+
+                cell = ws.cell(row=row, column=col_num)
+
+                if cell.value is not None:
+                    cell.number_format = "0.00"
+
+print("✅ Consolidation complete")
+
+upload_to_sharepoint(output_file)
 
     print("🎉 Pipeline finished successfully")
 
