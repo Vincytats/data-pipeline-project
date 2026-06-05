@@ -86,7 +86,35 @@ def download_file(service, file_id, mime_type):
 def process_file(file_stream, filename):
 
     df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
-    df.columns = df.columns.str.strip()
+
+    # Clean column names
+    df.columns = (
+        df.columns
+        .astype(str)
+        .str.strip()
+    )
+
+    # Handle Grand Total column variations
+    grand_total_col = None
+
+    for col in df.columns:
+
+        clean_col = (
+            str(col)
+            .strip()
+            .lower()
+            .replace(" ", "")
+        )
+
+        if clean_col == "grandtotal":
+            grand_total_col = col
+            break
+
+    if grand_total_col:
+        df.rename(
+            columns={grand_total_col: "Grand Total"},
+            inplace=True
+        )
 
     required_cols = [
         "ID Number",
@@ -111,10 +139,15 @@ def process_file(file_stream, filename):
     df = df[required_cols]
 
     # Keep text columns as text
-    df["ID Number"] = df["ID Number"].astype(str)
-    df["Wage category"] = df["Wage category"].astype(str).str.strip()
+    df["ID Number"] = df["ID Number"].astype(str).str.strip()
 
-    # Force numeric columns
+    df["Wage category"] = (
+        df["Wage category"]
+        .astype(str)
+        .str.strip()
+    )
+
+    # Numeric columns
     numeric_cols = [
         "Grand Total",
         "Nett Wages Paid",
@@ -131,6 +164,7 @@ def process_file(file_stream, filename):
             df[col]
             .astype(str)
             .str.replace(",", "", regex=False)
+            .str.replace("R", "", regex=False)
             .str.strip()
         )
 
@@ -139,11 +173,19 @@ def process_file(file_stream, filename):
             errors="coerce"
         )
 
+    # Debug Grand Total
+    print(
+        f"{filename}: "
+        f"Grand Total non-null values = "
+        f"{df['Grand Total'].notna().sum()}"
+    )
+
     # ==============================
     # FORCE DATE PAID
     # ==============================
 
     try:
+
         name_part = filename.replace(".xlsx", "")
 
         match = re.search(
@@ -167,7 +209,7 @@ def process_file(file_stream, filename):
                 date_obj.year,
                 date_obj.month,
                 last_day
-            ).strftime("%d/%m/%y")
+            ).strftime("%d/%m/%Y")
 
             df["Date Paid"] = formatted_date
 
@@ -185,11 +227,25 @@ def process_file(file_stream, filename):
 
         df["Date Paid"] = None
 
+    # Standardize any existing dates
+    try:
+
+        df["Date Paid"] = pd.to_datetime(
+            df["Date Paid"],
+            errors="coerce",
+            dayfirst=True
+        ).dt.strftime("%d/%m/%Y")
+
+    except Exception:
+        pass
+
     df["Reference"] = filename.replace(".xlsx", "")
-    df["Version"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    df["Version"] = datetime.now().strftime(
+        "%d/%m/%Y %H:%M:%S"
+    )
 
     return df
-
 # ==============================
 # GET MICROSOFT ACCESS TOKEN
 # ==============================
