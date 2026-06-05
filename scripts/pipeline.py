@@ -91,7 +91,7 @@ def process_file(file_stream, filename):
     required_cols = [
         "ID Number",
         "Wage category",
-        "Grand total",
+        "Grand Total",
         "Nett Wages Paid",
         "Days worked",
         "Nett Wages Due",
@@ -116,7 +116,7 @@ def process_file(file_stream, filename):
 
     # Force numeric columns
     numeric_cols = [
-        "Grand total",
+        "Grand Total",
         "Nett Wages Paid",
         "Days worked",
         "Nett Wages Due",
