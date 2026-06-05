@@ -82,40 +82,58 @@ def download_file(service, file_id, mime_type):
 # ==============================
 # PROCESS FILE
 # ==============================
-def process_file(file_stream, filename):
+df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
+df.columns = df.columns.str.strip()
 
-    df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
-    df.columns = df.columns.str.strip()
+required_cols = [
+    "ID Number",
+    "Wage category",
+    "Grand total",
+    "Nett Wages Paid",
+    "Days worked",
+    "Nett Wages Due",
+    "UIF (Participant)",
+    "SDL",
+    "Age",
+    "Gender",
+    "Education",
+    "Youth / Adult",
+    "Date Paid"
+]
 
-    required_cols = [
-        "ID Number", "Wage category", "Nett Wages Paid",
-        "Days worked", "Nett Wages Due", "UIF (Participant)",
-        "SDL", "Age", "Gender", "Education", "Youth / Adult",
-        "Date Paid"
-    ]
+for col in required_cols:
+    if col not in df.columns:
+        df[col] = None
 
-    for col in required_cols:
-        if col not in df.columns:
-            df[col] = None
+df = df[required_cols]
 
-    df = df[required_cols]
+# Keep text columns as text
+df["ID Number"] = df["ID Number"].astype(str)
+df["Wage category"] = df["Wage category"].astype(str).str.strip()
 
-    # Keep ID as text
-    df["ID Number"] = df["ID Number"].astype(str)
+# Force numeric columns
+numeric_cols = [
+    "Grand total",
+    "Nett Wages Paid",
+    "Days worked",
+    "Nett Wages Due",
+    "UIF (Participant)",
+    "SDL",
+    "Age"
+]
 
-    # Force numeric columns
-    numeric_cols = [
-        "Wage category",
-        "Nett Wages Paid",
-        "Days worked",
-        "Nett Wages Due",
-        "UIF (Participant)",
-        "SDL",
-        "Age"
-    ]
+for col in numeric_cols:
+    df[col] = (
+        df[col]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .str.strip()
+    )
 
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df[col] = pd.to_numeric(
+        df[col],
+        errors="coerce"
+    )
 
     # ==============================
     # FORCE DATE PAID
