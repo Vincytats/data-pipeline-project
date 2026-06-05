@@ -77,13 +77,13 @@ def download_file(service, file_id, mime_type):
 
     fh.seek(0)
     return fh
-
-
 # ==============================
 # PROCESS FILE
 # ==============================
 
 def process_file(file_stream, filename):
+
+    print(f"\n========== PROCESSING {filename} ==========")
 
     df = pd.read_excel(
         file_stream,
@@ -91,27 +91,79 @@ def process_file(file_stream, filename):
         dtype=str
     )
 
+    # ==============================
+    # DEBUG HEADERS
+    # ==============================
+
+    print("\n===== RAW COLUMN NAMES =====")
+
+    for i, col in enumerate(df.columns):
+        print(f"{i}: [{repr(col)}]")
+
     df.columns = (
         df.columns
         .astype(str)
         .str.strip()
     )
 
-    # Find Grand Total column regardless of spacing/case
+    print("\n===== CLEANED COLUMN NAMES =====")
+
+    for i, col in enumerate(df.columns):
+        print(f"{i}: [{repr(col)}]")
+
+    # ==============================
+    # FIND GRAND TOTAL COLUMN
+    # ==============================
+
+    grand_total_source = None
+
     for col in df.columns:
 
-        if (
+        clean_col = (
             str(col)
+            .replace("\n", "")
+            .replace("\r", "")
+            .replace(" ", "")
             .strip()
             .lower()
-            .replace(" ", "")
-            == "grandtotal"
-        ):
+        )
 
-            df.rename(
-                columns={col: "Grand Total"},
-                inplace=True
+        if "grand" in clean_col and "total" in clean_col:
+
+            grand_total_source = col
+            break
+
+    if grand_total_source:
+
+        print(
+            f"\n✅ GRAND TOTAL COLUMN FOUND: "
+            f"{grand_total_source}"
+        )
+
+        print("\n===== GRAND TOTAL SAMPLE =====")
+
+        try:
+            print(
+                df[grand_total_source]
+                .head(10)
+                .tolist()
             )
+        except Exception as e:
+            print(e)
+
+        df["Grand Total"] = df[grand_total_source]
+
+    else:
+
+        print(
+            "\n❌ GRAND TOTAL COLUMN NOT FOUND"
+        )
+
+        df["Grand Total"] = None
+
+    # ==============================
+    # REQUIRED COLUMNS
+    # ==============================
 
     required_cols = [
         "ID Number",
@@ -168,6 +220,9 @@ def process_file(file_stream, filename):
 
     for col in numeric_cols:
 
+        if col not in df.columns:
+            continue
+
         df[col] = (
             df[col]
             .astype(str)
@@ -181,38 +236,31 @@ def process_file(file_stream, filename):
             errors="coerce"
         )
 
-    # ==============================
-    # FIX GRAND TOTAL IF EMPTY
-    # ==============================
-
-    if (
-        "Grand Total" not in df.columns
-        or df["Grand Total"].isna().all()
-    ):
-
-        print(
-            "⚠️ Grand Total not found or blank."
-            " Calculating from wages."
-        )
-
-        df["Grand Total"] = (
-            df["Nett Wages Due"].fillna(0)
-            + df["UIF (Participant)"].fillna(0)
-            + df["SDL"].fillna(0)
-        )
-
     print(
-        f"Grand Total records loaded: "
+        f"\nGrand Total non-null values: "
         f"{df['Grand Total'].notna().sum()}"
     )
 
+    print(
+        "\nGrand Total first 10 values after conversion:"
+    )
+
+    print(
+        df["Grand Total"]
+        .head(10)
+        .tolist()
+    )
+
     # ==============================
-    # FORCE DATE PAID
+    # DATE PAID
     # ==============================
 
     try:
 
-        name_part = filename.replace(".xlsx", "")
+        name_part = filename.replace(
+            ".xlsx",
+            ""
+        )
 
         match = re.search(
             r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}",
@@ -239,18 +287,22 @@ def process_file(file_stream, filename):
 
         else:
 
+            print(
+                f"⚠ No month/year found in filename: {filename}"
+            )
+
             df["Date Paid"] = None
 
     except Exception as e:
 
         print(
-            f"⚠️ Date Paid error "
-            f"for {filename}: {e}"
+            f"⚠ Date error for {filename}: {e}"
         )
 
         df["Date Paid"] = None
 
-    # Force all dates to dd/mm/yyyy
+    # Force DD/MM/YYYY format
+
     try:
 
         df["Date Paid"] = pd.to_datetime(
@@ -262,6 +314,10 @@ def process_file(file_stream, filename):
     except Exception:
         pass
 
+    # ==============================
+    # METADATA
+    # ==============================
+
     df["Reference"] = filename.replace(
         ".xlsx",
         ""
@@ -272,6 +328,7 @@ def process_file(file_stream, filename):
     )
 
     return df
+
 # ==============================
 # GET MICROSOFT ACCESS TOKEN
 # ==============================
