@@ -82,62 +82,67 @@ def download_file(service, file_id, mime_type):
 # ==============================
 # PROCESS FILE
 # ==============================
-df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
-df.columns = df.columns.str.strip()
 
-required_cols = [
-    "ID Number",
-    "Wage category",
-    "Grand total",
-    "Nett Wages Paid",
-    "Days worked",
-    "Nett Wages Due",
-    "UIF (Participant)",
-    "SDL",
-    "Age",
-    "Gender",
-    "Education",
-    "Youth / Adult",
-    "Date Paid"
-]
+def process_file(file_stream, filename):
 
-for col in required_cols:
-    if col not in df.columns:
-        df[col] = None
+    df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
+    df.columns = df.columns.str.strip()
 
-df = df[required_cols]
+    required_cols = [
+        "ID Number",
+        "Wage category",
+        "Grand total",
+        "Nett Wages Paid",
+        "Days worked",
+        "Nett Wages Due",
+        "UIF (Participant)",
+        "SDL",
+        "Age",
+        "Gender",
+        "Education",
+        "Youth / Adult",
+        "Date Paid"
+    ]
 
-# Keep text columns as text
-df["ID Number"] = df["ID Number"].astype(str)
-df["Wage category"] = df["Wage category"].astype(str).str.strip()
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = None
 
-# Force numeric columns
-numeric_cols = [
-    "Grand total",
-    "Nett Wages Paid",
-    "Days worked",
-    "Nett Wages Due",
-    "UIF (Participant)",
-    "SDL",
-    "Age"
-]
+    df = df[required_cols]
 
-for col in numeric_cols:
-    df[col] = (
-        df[col]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .str.strip()
-    )
+    # Keep text columns as text
+    df["ID Number"] = df["ID Number"].astype(str)
+    df["Wage category"] = df["Wage category"].astype(str).str.strip()
 
-    df[col] = pd.to_numeric(
-        df[col],
-        errors="coerce"
-    )
+    # Force numeric columns
+    numeric_cols = [
+        "Grand total",
+        "Nett Wages Paid",
+        "Days worked",
+        "Nett Wages Due",
+        "UIF (Participant)",
+        "SDL",
+        "Age"
+    ]
+
+    for col in numeric_cols:
+
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.replace(",", "", regex=False)
+            .str.strip()
+        )
+
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        )
 
     # ==============================
     # FORCE DATE PAID
     # ==============================
+
     try:
         name_part = filename.replace(".xlsx", "")
 
@@ -147,9 +152,16 @@ for col in numeric_cols:
         )
 
         if match:
-            date_obj = datetime.strptime(match.group(), "%B %Y")
 
-            last_day = monthrange(date_obj.year, date_obj.month)[1]
+            date_obj = datetime.strptime(
+                match.group(),
+                "%B %Y"
+            )
+
+            last_day = monthrange(
+                date_obj.year,
+                date_obj.month
+            )[1]
 
             formatted_date = datetime(
                 date_obj.year,
@@ -158,11 +170,19 @@ for col in numeric_cols:
             ).strftime("%d/%m/%y")
 
             df["Date Paid"] = formatted_date
+
         else:
-            raise ValueError("Month-Year pattern not found in filename")
+            raise ValueError(
+                "Month-Year pattern not found in filename"
+            )
 
     except Exception as e:
-        print(f"⚠️ Could not derive Date Paid from filename {filename}: {e}")
+
+        print(
+            f"⚠️ Could not derive Date Paid "
+            f"from filename {filename}: {e}"
+        )
+
         df["Date Paid"] = None
 
     df["Reference"] = filename.replace(".xlsx", "")
