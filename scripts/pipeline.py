@@ -85,36 +85,39 @@ def download_file(service, file_id, mime_type):
 
 def process_file(file_stream, filename):
 
-    df = pd.read_excel(file_stream, dtype=str, sheet_name=0)
+    df = pd.read_excel(
+        file_stream,
+        sheet_name=0,
+        dtype=str
+    )
 
-    # Clean column names
+    # Clean headers
     df.columns = (
         df.columns
         .astype(str)
         .str.strip()
     )
 
-    # Handle Grand Total column variations
-    grand_total_col = None
-
+    # Find Grand Total column regardless of formatting
     for col in df.columns:
 
-        clean_col = (
+        col_clean = (
             str(col)
-            .strip()
             .lower()
+            .strip()
             .replace(" ", "")
         )
 
-        if clean_col == "grandtotal":
-            grand_total_col = col
-            break
+        if "grandtotal" in col_clean:
 
-    if grand_total_col:
-        df.rename(
-            columns={grand_total_col: "Grand Total"},
-            inplace=True
-        )
+            print(f"✅ Grand Total column found: {col}")
+
+            df.rename(
+                columns={col: "Grand Total"},
+                inplace=True
+            )
+
+            break
 
     required_cols = [
         "ID Number",
@@ -133,13 +136,21 @@ def process_file(file_stream, filename):
     ]
 
     for col in required_cols:
+
         if col not in df.columns:
             df[col] = None
 
     df = df[required_cols]
 
-    # Keep text columns as text
-    df["ID Number"] = df["ID Number"].astype(str).str.strip()
+    # ==============================
+    # TEXT FIELDS
+    # ==============================
+
+    df["ID Number"] = (
+        df["ID Number"]
+        .astype(str)
+        .str.strip()
+    )
 
     df["Wage category"] = (
         df["Wage category"]
@@ -147,7 +158,10 @@ def process_file(file_stream, filename):
         .str.strip()
     )
 
-    # Numeric columns
+    # ==============================
+    # NUMERIC FIELDS
+    # ==============================
+
     numeric_cols = [
         "Grand Total",
         "Nett Wages Paid",
@@ -159,6 +173,9 @@ def process_file(file_stream, filename):
     ]
 
     for col in numeric_cols:
+
+        if col not in df.columns:
+            continue
 
         df[col] = (
             df[col]
@@ -173,15 +190,13 @@ def process_file(file_stream, filename):
             errors="coerce"
         )
 
-    # Debug Grand Total
     print(
-        f"{filename}: "
-        f"Grand Total non-null values = "
+        f"Grand Total non-null records: "
         f"{df['Grand Total'].notna().sum()}"
     )
 
     # ==============================
-    # FORCE DATE PAID
+    # DATE PAID
     # ==============================
 
     try:
@@ -205,29 +220,27 @@ def process_file(file_stream, filename):
                 date_obj.month
             )[1]
 
-            formatted_date = datetime(
+            df["Date Paid"] = datetime(
                 date_obj.year,
                 date_obj.month,
                 last_day
             ).strftime("%d/%m/%Y")
 
-            df["Date Paid"] = formatted_date
-
         else:
-            raise ValueError(
-                "Month-Year pattern not found in filename"
-            )
+
+            df["Date Paid"] = None
 
     except Exception as e:
 
         print(
-            f"⚠️ Could not derive Date Paid "
-            f"from filename {filename}: {e}"
+            f"⚠ Could not derive Date Paid "
+            f"from {filename}: {e}"
         )
 
         df["Date Paid"] = None
 
-    # Standardize any existing dates
+    # Standardise all dates to dd/mm/yyyy
+
     try:
 
         df["Date Paid"] = pd.to_datetime(
@@ -239,7 +252,12 @@ def process_file(file_stream, filename):
     except Exception:
         pass
 
-    df["Reference"] = filename.replace(".xlsx", "")
+    # Metadata
+
+    df["Reference"] = filename.replace(
+        ".xlsx",
+        ""
+    )
 
     df["Version"] = datetime.now().strftime(
         "%d/%m/%Y %H:%M:%S"
