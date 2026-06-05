@@ -91,33 +91,27 @@ def process_file(file_stream, filename):
         dtype=str
     )
 
-    # Clean headers
     df.columns = (
         df.columns
         .astype(str)
         .str.strip()
     )
 
-    # Find Grand Total column regardless of formatting
+    # Find Grand Total column regardless of spacing/case
     for col in df.columns:
 
-        col_clean = (
+        if (
             str(col)
-            .lower()
             .strip()
+            .lower()
             .replace(" ", "")
-        )
-
-        if "grandtotal" in col_clean:
-
-            print(f"✅ Grand Total column found: {col}")
+            == "grandtotal"
+        ):
 
             df.rename(
                 columns={col: "Grand Total"},
                 inplace=True
             )
-
-            break
 
     required_cols = [
         "ID Number",
@@ -143,7 +137,7 @@ def process_file(file_stream, filename):
     df = df[required_cols]
 
     # ==============================
-    # TEXT FIELDS
+    # TEXT COLUMNS
     # ==============================
 
     df["ID Number"] = (
@@ -159,7 +153,7 @@ def process_file(file_stream, filename):
     )
 
     # ==============================
-    # NUMERIC FIELDS
+    # NUMERIC COLUMNS
     # ==============================
 
     numeric_cols = [
@@ -174,9 +168,6 @@ def process_file(file_stream, filename):
 
     for col in numeric_cols:
 
-        if col not in df.columns:
-            continue
-
         df[col] = (
             df[col]
             .astype(str)
@@ -190,13 +181,33 @@ def process_file(file_stream, filename):
             errors="coerce"
         )
 
+    # ==============================
+    # FIX GRAND TOTAL IF EMPTY
+    # ==============================
+
+    if (
+        "Grand Total" not in df.columns
+        or df["Grand Total"].isna().all()
+    ):
+
+        print(
+            "⚠️ Grand Total not found or blank."
+            " Calculating from wages."
+        )
+
+        df["Grand Total"] = (
+            df["Nett Wages Due"].fillna(0)
+            + df["UIF (Participant)"].fillna(0)
+            + df["SDL"].fillna(0)
+        )
+
     print(
-        f"Grand Total non-null records: "
+        f"Grand Total records loaded: "
         f"{df['Grand Total'].notna().sum()}"
     )
 
     # ==============================
-    # DATE PAID
+    # FORCE DATE PAID
     # ==============================
 
     try:
@@ -233,14 +244,13 @@ def process_file(file_stream, filename):
     except Exception as e:
 
         print(
-            f"⚠ Could not derive Date Paid "
-            f"from {filename}: {e}"
+            f"⚠️ Date Paid error "
+            f"for {filename}: {e}"
         )
 
         df["Date Paid"] = None
 
-    # Standardise all dates to dd/mm/yyyy
-
+    # Force all dates to dd/mm/yyyy
     try:
 
         df["Date Paid"] = pd.to_datetime(
@@ -251,8 +261,6 @@ def process_file(file_stream, filename):
 
     except Exception:
         pass
-
-    # Metadata
 
     df["Reference"] = filename.replace(
         ".xlsx",
